@@ -3,8 +3,8 @@ A place where Minecraft server owners can download some basic scripts and edit, 
 
 # Punishment System
 	skUnity: https://forums.skunity.com/resources/punishment-system.865/
-  spigotMC: https://www.spigotmc.org/threads/punishment-system.396058/
+	spigotMC: https://www.spigotmc.org/threads/punishment-system.396058/
   
 # Health Bar
-  skUnity: https://forums.skunity.com/resources/health-bar.866/
-  spigotMC: https://www.spigotmc.org/resources/health-bar.71318/
+	skUnity: https://forums.skunity.com/resources/health-bar.866/
+	spigotMC: https://www.spigotmc.org/resources/health-bar.71318/
