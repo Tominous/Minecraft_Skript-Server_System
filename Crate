@@ -5,9 +5,9 @@ on rightclick on a chest:
 		send "&cYou must be holding Item Crate Key to open this crate!" to player
 		stop
 	set slot (current hotbar slot of player) of player's inventory to (((item amount of {_item}) - 1) of {_item})
-	prison_itemCrate(player)
+	crate_open(player)
 
-function prison_itemCrate(player: player):
+function crate_open(player: player):
 	open chest with 5 row named "&6Item Crate" to {_player}
 	format a gui slot 13 of {_player} with orange glass to do nothing
 	format a gui slot 31 of {_player} with orange glass to do nothing
