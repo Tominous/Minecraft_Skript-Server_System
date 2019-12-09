@@ -1,0 +1,40 @@
+on rightclick on a chest:
+	cancel event
+	set {_item} to player's tool
+	if {_item} is not tripwire hook named "&cItem Crate Key" with lore "&eA key to open item crate":
+		send "&cYou must be holding Item Crate Key to open this crate!" to player
+		stop
+	set slot (current hotbar slot of player) of player's inventory to (((item amount of {_item}) - 1) of {_item})
+	prison_itemCrate(player)
+
+function prison_itemCrate(player: player):
+	open chest with 5 row named "&6Item Crate" to {_player}
+	format a gui slot 13 of {_player} with orange glass to do nothing
+	format a gui slot 31 of {_player} with orange glass to do nothing
+	loop 5 times:
+		set {_rewardSlot::%loop-number%} to air
+	loop 60 times:
+		loop 4 times:
+			set {_rewardSlot::%loop-number-2%} to {_rewardSlot::%(loop-number-2 + 1)%}
+		set {_random} to random integer between 1 and 100
+		if {_random} <= 10:
+			set {_rewardSlot::5} to stone named "&a10%% chance to get this item." with lore "&7TEST ITEM"
+		else if {_random} <= 60:
+			set {_rewardSlot::5} to cobble stone named "&a50%% chance to get this item. (60 - 10 = 50)" with lore "&7TEST ITEM"
+		else if {_random} <= 65:
+			set {_rewardSlot::5} to diamond named "&a5%% chance to get this item. (65 - 60 = 5)" with lore "&7TEST ITEM"
+		else:
+			set {_rewardSlot::5} to red glass named "&cNothing" with lore "&7&oNothing"
+		loop 5 times:
+			format a gui slot (19 + loop-number-2) of {_player} with {_rewardSlot::%loop-number-2%} to do nothing
+		play sound "entity.experience_orb.pickup" with volume 99999 and pitch 1 at {_player}'s location for {_player}
+		wait 2 ticks
+	if {_rewardSlot::3} is red glass named "&cNothing" with lore "&7&oNothing":
+		send "&cRIP... looks like you didn't get anything from the crate! Better luck next time..." to {_player}
+	else:
+		give {_rewardSlot::3} to {_player}
+		send "&aCongratulations! You found &f%prison_itemCrateItemName({_rewardSlot::3})% &afrom the crate!" to {_player}
+
+function prison_itemCrateItemName(item: item) :: text:
+	return {_item}'s name
+	# this function is created because Skript sucks and fail to read {_rewardSlot::3}'s name.. so I use function to return it
