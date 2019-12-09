@@ -1,4 +1,4 @@
-function prison_regenBlock(location1: location, location2: location, fillBlocks: items):
+function regionFill_area(location1: location, location2: location, fillBlocks: items):
 	set {_floors} to (1 + round(abs(({_location1}'s y coords) - ({_location2}'s y coords))))
 	if {_location1}'s x coords > {_location2}'s x coords:
 		set {_xChange} to -1
