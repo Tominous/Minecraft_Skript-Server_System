@@ -15,4 +15,4 @@ A place where Minecraft server owners can download some basic scripts and edit, 
 	Fill blocks between location 1 and location 2 with random blocks out of fillBlocks.
 
 # Crate
-	
+	[]
