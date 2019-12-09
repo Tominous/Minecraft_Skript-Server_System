@@ -8,3 +8,8 @@ A place where Minecraft server owners can download some basic scripts and edit, 
 # Health Bar
 	skUnity: https://forums.skunity.com/resources/health-bar.866/
 	spigotMC: https://www.spigotmc.org/resources/health-bar.71318/
+
+# Region Fill Block
+	prison_regenBlock(location1, location2, fillBlocks)
+	
+	Fill blocks between location 1 and location 2 with random blocks out of fillBlocks.
