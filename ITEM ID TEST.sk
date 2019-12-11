@@ -1,0 +1,190 @@
+on join:
+	wait 5 ticks
+	itemID_loadInventory(player)
+
+on quit:
+	itemID_saveInventory(player)
+	clear player's inventory
+
+command /itemid [<text>] [<text>]:
+	trigger:
+		if executor is not a op:
+			send "&cYou are not allowed to use this command!" to executor
+			stop
+		if arg 1 is not set:
+			send "&cUsage: /itemid <help/editor/inventory/add> ..." to executor
+			stop
+		if arg 1 is "help":
+			send "%nl%&f%nl%&a+ ItemID Help +%nl%&e/itemid help &a- &eDisplay command informations.%nl%&e/itemid editor &a- &eOpen a gui editor to do action such as remove item or disable item.%nl%&e/itemid inventory &a- &eForce system to save or load inventory of command executor.%nl%&e/itemid add &a- &eHold an item and run this command to add new item.%nl%&f%nl%" to executor
+		else if arg 1 is "editor":
+			itemID_editorGUI(executor, 1)
+		else if arg 1 is "inventory":
+			if arg 2 is "save":
+				itemID_saveInventory(player)
+			else if arg 2 is "load":
+				itemID_loadInventory(player)
+			else:
+				send "&cUsage: /itemid inventory <save/load>" to executor
+		else if arg 1 is "add":
+			if arg 2 is not set:
+				send "&cUsage: /itemid add <id>" to executor
+				stop
+			set {_rawID} to arg 2
+			replace all ":" with "" in {_rawID}
+			set {_tool} to executor's tool
+			if {_tool} is air:
+				send "&cPlease hold an item to select target!" to executor
+			else if itemID_checkItemExist({_tool}) is true:
+				send "&cThis item alreadly exist!" to executor
+			else if itemID_checkIDExist({_rawID}) is true:
+				send "&cThis ID alreadly exist!" to executor
+			else:
+				itemID_newItem({_tool}, {_rawID})
+				send "&aAdded item with ID &6%{_rawID}%&a!" to executor
+
+function itemID_checkItemExist(item: item) :: boolean:
+	loop {itemIdItems::*}:
+		if {itemIdItems::%loop-index%} is (1 of {_item}):
+			return true
+	return false
+
+function itemID_checkIDExist(id: text) :: boolean:
+	if {itemIdItems::%{_id}%} is set:
+		return true
+	return false
+
+function itemID_itemToID(item: item) :: text:
+	loop {itemIdItems::*}:
+		if {itemIdItems::%loop-index%} is (1 of {_item}):
+			return loop-index
+
+function itemID_newItem(item: item, id: text):
+	set {itemIdItems::%{_id}%} to (1 of {_item})
+
+function itemID_removeItem(id: text):
+	delete {itemIdItems::%{_id}%}
+	delete {itemIdItemsLock::%{_id}%}
+
+function itemID_getItem(player: player, id: text):
+	give {itemIdItems::%{_id}%} to {_player}
+
+function itemID_lockItem(id: text):
+	set {itemIdItemsLock::%{_id}%} to now
+
+function itemID_unlockItem(id: text):
+	delete {itemIdItemsLock::%{_id}%}
+
+function itemID_checkIDLocked(id: text) :: boolean:
+	if {itemIdItemsLock::%{_id}%} is set:
+		return true
+	return false
+
+function itemID_saveInventory(player: player):
+	delete {playerInventory::%{_player}%::*}
+	loop 41 times:
+		delete {_saved}
+		set {_loopInventorySlot} to (loop-number - 1)
+		set {_loopInventorySlotItem} to (slot {_loopInventorySlot} of {_player}'s inventory)
+		delete {_notInDetection}
+		if {_loopInventorySlotItem} is not set:
+			set {_notInDetection} to true
+		else if {_loopInventorySlotItem} is air:
+			set {_notInDetection} to true
+		if {_notInDetection} is not set:
+			if itemID_checkItemExist({_loopInventorySlotItem}) is true:
+				set {_itemID} to itemID_itemToID({_loopInventorySlotItem})
+				if itemID_checkIDLocked({_itemID}) is false:
+					set {playerInventory::%{_player}%::%{_loopInventorySlot}%} to "%(item amount of {_loopInventorySlotItem})%:%{_itemID}%"
+					set {_saved} to true
+			if {_saved} is not set:
+				if {_failedSaves} is not set:
+					set {_failedSaves} to 0
+				add 1 to {_failedSaves}
+	if {_failedSaves} is set:
+		send "&cFailed to save %{_failedSaves}% items! (Might be caused by item not exist or disabled)" to {_player}
+	else:
+		send "&aSuccessfully saved your inventory!" to {_player}
+
+function itemID_loadInventory(player: player):
+	clear {_player}'s inventory
+	loop {playerInventory::%{_player}%::*}:
+		delete {_loaded}
+		set {_loopSlot} to ("%loop-index%" parsed as number)
+		set {_loopDatas::*} to {playerInventory::%{_player}%::%{_loopSlot}%} split by ":"
+		set {_loopID} to {_loopDatas::2}
+		if itemID_checkIDExist({_loopID}) is true:
+			if itemID_checkIDLocked({_loopID}) is false:
+				set {_loopAmount} to ("%{_loopDatas::1}%" parsed as number)
+				set {_loopItem} to {itemIdItems::%{_loopID}%}
+				set slot {_loopSlot} of {_player}'s inventory to ({_loopAmount} of {_loopItem})
+				set {_loaded} to true
+		if {_loaded} is not set:
+			add {playerInventory::%{_player}%::%{_loopSlot}%} to {_failedToLoad::*}
+	if {_failedToLoad::*} is set:
+		send "&cFailed to load items: %{_failedToLoad::*}% (Might be caused by item not exist or disabled)" to {_player}
+	else:
+		send "&aSuccessfully loaded your inventory!" to {_player}
+
+function itemID_editorGUI(player: player, page: number):
+	set {_maxiumPages} to ceil((amount of {itemIdItems::*}) / 27)
+	open chest with 6 row named "&cItem ID Editor (Page: %{_page}%/%{_maxiumPages}%)" to {_player}
+	loop 9 times:
+		format a gui slot (loop-number - 1) of {_player} with white glass to do nothing
+	loop 9 times:
+		format a gui slot (loop-number + 35) of {_player} with white glass to do nothing
+	if {_page} > 1:
+		format a gui slot 46 of {_player} with arrow named "&aPrevious Page &7(%{_page}%/%{_maxiumPages}%)" with lore "&7Click to go to previous page" to close then run function itemID_editorGUI({_player}, ({_page} - 1))
+	else:
+		format a gui slot 46 of {_player} with arrow named "&aPrevious Page &7(%{_page}%/%{_maxiumPages}%)" with lore "&cThis is the first page of editor!" to do nothing
+	if {_page} < {_maxiumPages}:
+		format a gui slot 52 of {_player} with arrow named "&aNext Page &7(%{_page}%/%{_maxiumPages}%)" with lore "&7Click to go to next page" to close then run function itemID_editorGUI({_player}, ({_page} + 1))
+	else:
+		format a gui slot 52 of {_player} with arrow named "&aNext Page &7(%{_page}%/%{_maxiumPages}%)" with lore "&cThis is the last page of editor!" to do nothing
+	format a gui slot 49 of {_player} with redstone block named "&aEditor Stats" with lore "&f||&eCurrent Page: &f%{_page}%||&eTotal Pages: &f%{_maxiumPages}%||&f||&eTotal Items: &f%amount of {itemIdItems::*}%||&eDisabled Items: &f%amount of {itemIdItemsLock::*}%" to do nothing
+	set {_order} to 1
+	set {_slot} to 9
+	set {_minOrder} to ((({_page} - 1) * 27) + 1)
+	loop {itemIdItems::*}:
+		set {_loopItem} to {itemIdItems::%loop-index%}
+		delete {_notAllowed}
+		if {_order} < {_minOrder}:
+			set {_notAllowed} to true
+		else if {_order} > ({_minOrder} + 26):
+			set {_notAllowed} to true
+		if {_notAllowed} is not set:
+			set {_loopItem} to {_loopItem} with lore "%{_loopItem}'s lore%||&f||&eID: %loop-index%||&eLeft-Click To Edit||&eRight-Click to Get Item"
+			if itemID_checkIDLocked(loop-index) is true:
+				set {_loopItem} to {_loopItem} with lore "%{_loopItem}'s lore%||||&c&lITEM DISABLED"
+			format a gui slot {_slot} of {_player} with {_loopItem} to run function itemID_getItem({_player}, loop-index) with "right" click
+			format a gui slot {_slot} of {_player} with {_loopItem} to run function itemID_editorGUIEditItem({_player}, loop-index) with "left" click
+			add 1 to {_slot}
+		add 1 to {_order}
+
+function itemID_editorGUIEditItem(player: player, id: text):
+	open chest with 6 row named "&cItem ID Editor - Edit Item ID: %{_id}%" to {_player}
+	loop 9 times:
+		format a gui slot (loop-number - 1) of {_player} with white glass to do nothing
+	loop 9 times:
+		format a gui slot (loop-number + 35) of {_player} with white glass to do nothing
+	format a gui slot 19 of {_player} with barrier named "&cRemove Item" with lore "&7Click to remove the item, this||&7action can't be undo after." to run function itemID_editorGUIEditItemAction({_player}, {_id}, "REMOVE_ITEM")
+	if itemID_checkIDLocked({_id}) is true:
+		format a gui slot 21 of {_player} with gunpowder named "&aEnable Item" with lore "&7Click to allow item from being ||&7save/load." to run function itemID_editorGUIEditItemAction({_player}, {_id}, "ENABLE_ITEM")
+	else:
+		format a gui slot 21 of {_player} with redstone dust named "&cDisable Item" with lore "&7Click to stop item from being||&7save/load without deleting it." to run function itemID_editorGUIEditItemAction({_player}, {_id}, "DISABLE_ITEM")
+	format a gui slot 23 of {_player} with iron pickaxe named "&cEdit Item ID (&c&lNOT DONE&c)" with lore "&7Click to change item ID||&c&lNOT DONE" to do nothing
+	format a gui slot 25 of {_player} with iron door item named "&cBack To Item List" with lore "&7Click to return to item list." to run function itemID_editorGUIEditItemAction({_player}, {_id}, "BACK_TO_LIST")
+	format a gui slot 49 of {_player} with redstone block named "&aEditor Stats" with lore "&f||&eItem ID: &f%{_id}%||&f||&eTotal Items: &f%amount of {itemIdItems::*}%||&eDisabled Items: &f%amount of {itemIdItemsLock::*}%" to do nothing
+
+function itemID_editorGUIEditItemAction(player: player, id: text, action: text):
+	if {_action} is "REMOVE_ITEM":
+		itemID_removeItem({_id})
+		itemID_editorGUI({_player}, 1)
+		stop
+	else if {_action} is "DISABLE_ITEM":
+		itemID_lockItem({_id})
+	else if {_action} is "ENABLE_ITEM":
+		itemID_unlockItem({_id})
+	else if {_action} is "BACK_TO_LIST":
+		itemID_editorGUI({_player}, 1)
+		stop
+	itemID_editorGUIEditItem({_player}, {_id})
