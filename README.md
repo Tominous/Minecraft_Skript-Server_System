@@ -22,4 +22,7 @@ A place where Minecraft server owners can download some basic scripts and edit, 
 	A crate script that allow server owners to add in items and put chance for each items.
 
 # Item ID
-	A script that good for blocking players from having illegal items. When the player join, it load their inventory by the datas saved last time they left, illegal items that aren't whitelisted in the system won't be saved/loaded which can stop players from having it.
+	A script that good for blocking players from having illegal items.
+	When the player join, it load their inventory by the datas saved last time they left,
+	illegal items that aren't whitelisted in the system won't be saved/loaded which can
+	stop players from having it.
