@@ -26,3 +26,7 @@ A place where Minecraft server owners can download some basic scripts and edit, 
 	When the player join, it load their inventory by the datas saved last time they left,
 	illegal items that aren't whitelisted in the system won't be saved/loaded which can
 	stop players from having it.
+
+# Top Damagers
+	Broadcast the top damagers when a entity get killed, good for setting up
+	on bosses to reward players who participate in killing the boss.
