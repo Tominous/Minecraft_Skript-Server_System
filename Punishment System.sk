@@ -253,8 +253,8 @@ command /name-history [<offline player>]:
 		loop {_nameDatas::*}:
 			if {_nameDatas::%loop-index%} contains ":":
 				set {_data::*} to {_nameDatas::%loop-index%} split by ":"
-				set {_date} to api_UnixToDate({_data::2})
-				set {_namesDisplay} to "%{_namesDisplay}%%nl%&a- &e%{_data::1}% &a(Changed to on &e%api_UnixToDate({_data::2} parsed as number / 1000)%&a)"
+				set {_date} to api_unixToDate({_data::2})
+				set {_namesDisplay} to "%{_namesDisplay}%%nl%&a- &e%{_data::1}% &a(Changed to on &e%api_unixToDate({_data::2} parsed as number / 1000)%&a)"
 			else:
 				set {_namesDisplay} to "%{_namesDisplay}%%nl%&a- &e%{_nameDatas::%loop-index%}%"
 		send "&aName history for player &e%arg 1% &a(&e%amount of {_nameDatas::*}%&a):%{_namesDisplay}%" to executor
