@@ -1,0 +1,1075 @@
+# PLAYER DATA: <PLAYER UUID>:<WORLDS AMOUNT>:<WORLDS>:<CURRENT IN WORLD ID>:<ADMIN MODE>:<LOGS MODE>
+# WORLD DATA: <WORLD ID>:<WORLD OWNER UUID>:<WORLD NAME>:<WORLD CREATE TIME>:<BANNED PLAYER UUIDS>
+
+options:
+	systemAdministratorPermission: worlds.administrator
+	systemDeveloperPermission: worlds.developer
+
+command /world [<text>] [<text>] [<text>]:
+	trigger:
+		if arg 1 is not set:
+			send "&cUsage: /world <create|delete|visit|lobby|ban|unban|admin|logs|world|player|system> <...>" to executor
+			stop
+		if arg 1 is not "create" or "delete" or "visit" or "lobby" or "ban" or "unban" or "admin" or "logs" or "world" or "player" or "system":
+			send "&cUsage: /world <create|delete|visit|lobby|ban|unban|admin|logs|world|player|system> <...>" to executor
+			stop
+		if arg 1 is "create":
+			if arg 2 is not set:
+				send "&cUsage: /world create <name>" to executor
+				stop
+			if {worldSystemData::worldModelPosition_3} is not set:
+				send "&cThe system has not been setup yet!%nl%&cPlease contact an developer to run ""/world system setWorldModel""." to executor
+				stop
+			set {_checkWorldDatas::*} to worlds_getWorldDataWithName(arg 2)
+			if {_checkWorldDatas::*} is set:
+				set {_worldOwnerNames::*} to api_getPlayerName({_checkWorldDatas::2}, false)
+				set {_worldOwnerNameAmount} to amount of {_worldOwnerNames::*}
+				send "&c%{_worldOwnerNames::%{_worldOwnerNameAmount}%}% has already created a world with the name!" to executor
+				stop
+			if worlds_checkAlphanumeric(arg 2) is false:
+				send "&cYou are only allowed to use characters and numbers in world name!" to executor
+				stop
+			if arg 2 is "Lobby":
+				send "&cYou are not allowed to create a world with this name!" to executor
+				stop
+			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
+			set {_playerWorldsAmount} to ({_playerDatas::2} parsed as number)
+			if {_playerWorldsAmount} >= {worldSystemData::playerMaximumWorlds}:
+				set {_playerWorldsData::*} to worlds_getPlayerWorlds(executor's uuid)
+				loop {_playerWorldsData::*}:
+					set {_loopWorldDatas::*} to worlds_getWorldDatas({_playerWorldsData::%loop-index%})
+					add {_loopWorldDatas::3} to {_playerWorldNames::*}
+				send "&cYou have reached maximum worlds limit! (%{_playerWorldsAmount}%/%{worldSystemData::playerMaximumWorlds}%)" to executor
+				if (amount of {_playerWorldNames::*}) > 0:
+					send "&c&lYour Worlds: &c%{_playerWorldNames::*}%" to executor
+				stop
+			worlds_registerWorld(worlds_getEmptyID(), executor, arg 2)
+		else if arg 1 is "delete":
+			if arg 2 is not set:
+				send "&cUsage: /world delete <name>" to executor
+				stop
+			set {_targetWorldDatas::*} to worlds_getWorldDataWithName(arg 2)
+			if {_targetWorldDatas::*} is not set:
+				send "&cNot found world with name %arg 2%!" to executor
+				stop
+			if {_targetWorldDatas::2} is not (executor's uuid):
+				set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
+				set {_playerWorldsData::*} to worlds_getPlayerWorlds(executor's uuid)
+				loop {_playerWorldsData::*}:
+					set {_loopWorldDatas::*} to worlds_getWorldDatas({_playerWorldsData::%loop-index%})
+					add {_loopWorldDatas::3} to {_playerWorldNames::*}
+				send "&cYou aren't allowed to delete other player's world!" to executor
+				if (amount of {_playerWorldNames::*}) > 0:
+					send "&c&lYour Worlds: &c%{_playerWorldNames::*}%" to executor
+			if {worldSystemData::worldCreateProgress_%{_targetWorldDatas::1}%} is set:
+				send "&cThis world is still generating!" to executor
+				stop
+			worlds_deleteWorld({_targetWorldDatas::1})
+			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
+			send "&cYou have deleted world with name %{_targetWorldDatas::3}%! (%{_playerDatas::2}%/%{worldSystemData::playerMaximumWorlds}%)" to executor
+		else if arg 1 is "visit":
+			if arg 2 is not set:
+				worlds_openMenu(executor, "ACTIVE_WORLDS", 1)
+				stop
+			set {_targetWorldDatas::*} to worlds_getWorldDataWithName(arg 2)
+			if {_targetWorldDatas::*} is not set:
+				send "&cNot found world with name %arg 2%!" to executor
+				stop
+			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
+			if {_playerDatas::4} is {_targetWorldDatas::1}:
+				send "&cYou are already in this world!" to executor
+				stop
+			if {worldSystemData::worldCreateProgress_%{_targetWorldDatas::1}%} is set:
+				send "&cThis world is still generating!" to executor
+				stop
+			worlds_visitWorld(executor, {_targetWorldDatas::1})
+		else if arg 1 is "lobby":
+			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
+			if {_playerDatas::4} is "":
+				send "&cYou are already in lobby!" to executor
+				stop
+			worlds_saveInventory(executor, {_playerDatas::4})
+			clear executor's inventory
+			set executor's health to 10
+			set executor's hunger to 10
+			teleport executor to {worldSystemData::serverLobbyLocation}
+			worlds_editPlayerData((executor's UUID), 4, "")
+			worlds_updateScoreboardForAll()
+			worlds_updateTablist(executor)
+			send "&aYou have been teleported to lobby!" to executor
+			worlds_sendMessageToLog("%executor% have been teleported to lobby.")
+		else if arg 1 is "ban":
+			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
+			set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+			if {_worldDatas::2} is not (executor's uuid):
+				send "&cYou are not allowed to ban players in other player's world!" to executor
+				stop
+			if arg 2 is not set:
+				send "&cUsage: /world ban <player>" to executor
+				stop
+			set {_targetPlayer} to (arg 2 parsed as offline player)
+			if {_targetPlayer} is not set:
+				send "&cNot found player with name %arg 2%!" to executor
+				stop
+			if worlds_checkPlayerBanned({_playerDatas::4}, ({_targetPlayer}'s UUID)) is true:
+				send "&cThis player is already banned!" to executor
+				stop
+			if executor is {_targetPlayer}:
+				send "&cYou aren't allowed to ban yourself!" to executor
+				stop
+			worlds_banPlayer({_playerDatas::4}, ({_targetPlayer}'s UUID))
+		else if arg 1 is "unban":
+			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
+			set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+			if {_worldDatas::2} is not (executor's uuid):
+				send "&cYou are not allowed to unban players in other player's world!" to executor
+				stop
+			if arg 2 is not set:
+				worlds_openMenu(player, "WORLD_BANNED_PLAYERS", 1, {_playerDatas::4})
+				stop
+			set {_targetPlayer} to (arg 2 parsed as offline player)
+			if {_targetPlayer} is not set:
+				send "&cNot found player with name %arg 2%!" to executor
+				stop
+			if worlds_checkPlayerBanned({_playerDatas::4}, ({_targetPlayer}'s UUID)) is false:
+				send "&cThis player is not banned!" to executor
+				stop
+			worlds_unbanPlayer({_playerDatas::4}, ({_targetPlayer}'s UUID))
+		else if arg 1 is "admin":
+			if executor doesn't have permission "{@systemAdministratorPermission}":
+				send "&cYou are not allowed to use this sub-command! (Require {@systemAdministratorPermission})" to executor
+				stop
+			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
+			if {_playerDatas::5} is "TRUE":
+				worlds_editPlayerData((executor's UUID), 5, "FALSE")
+				send "&eYou have turned &coff &eadministrator mode!" to executor
+				worlds_sendMessageToLog("%executor% has turned off administrator mode.")
+			else:
+				worlds_editPlayerData((executor's UUID), 5, "TRUE")
+				send "&eYou have turned &aon &eadministrator mode!%nl%&eYou can now bypass block place/break, world visit limitation, and world ban." to executor
+				worlds_sendMessageToLog("%executor% has turned on administrator mode.")
+		else if arg 1 is "logs":
+			if executor doesn't have permission "{@systemDeveloperPermission}":
+				send "&cYou are not allowed to use this sub-command! (Require {@systemDeveloperPermission})" to executor
+				stop
+			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
+			if {_playerDatas::6} is "TRUE":
+				worlds_editPlayerData((executor's UUID), 6, "FALSE")
+				send "&eYou have turned &coff &eworlds system logs!" to executor
+				worlds_sendMessageToLog("%executor% has turned off logs mode.")
+			else:
+				worlds_editPlayerData((executor's UUID), 6, "TRUE")
+				send "&eYou have turned &aon &eworlds system logs!" to executor
+				worlds_sendMessageToLog("%executor% has turned on logs mode.")
+		else if arg 1 is "world":
+			if arg 2 is not set:
+				send "&cUsage: /world world <name>" to executor
+				stop
+			set {_targetWorldDatas::*} to worlds_getWorldDataWithName(arg 2)
+			if {_targetWorldDatas::*} is not set:
+				send "&cNot found world with name %arg 2%!" to executor
+				stop
+			set {_targetWorldOwner} to ({_targetWorldDatas::2} parsed as offline player)
+			set {_createTime} to {_targetWorldDatas::4}
+			replace all "-" with ":" in {_createTime}
+			send "%nl%&e[World Information]%nl%&eName: &f%{_targetWorldDatas::3}%%nl%&eOwner: &f%{_targetWorldOwner}%%nl%&eCreated: &f%{_createTime}%%nl%" to executor
+		else if arg 1 is "player":
+			if arg 2 is not set:
+				send "&cUsage: /world player <player>" to executor
+				stop
+			set {_targetPlayer} to (arg 2 parsed as offline player)
+			if {_targetPlayer} is not set:
+				send "&cThe player has never joined before!" to executor
+				stop
+			set {_targetPlayerDatas::*} to worlds_getPlayerDatas({_targetPlayer}'s uuid)
+			if {_targetPlayerDatas::*} is not set:
+				send "&cNo data found for the player!" to executor
+				stop
+			set {_targetPlayerWorlds::*} to {_targetPlayerDatas::3} split by ","
+			loop {_targetPlayerWorlds::*}:
+				set {_loopWorldDatas::*} to worlds_getWorldDatas({_targetPlayerWorlds::%loop-index%})
+				add {_loopWorldDatas::3} to {_targetPlayerWorldNames::*}
+			set {_targetPlayerInWorldDatas::*} to worlds_getWorldDatas({_targetPlayerDatas::4})
+			if {_targetPlayer} is not online:
+				set {_inWorld} to "This player is not online :("
+			else if {_targetPlayerInWorldDatas::3} is set:
+				set {_inWorld} to {_targetPlayerInWorldDatas::3}
+			else:
+				set {_inWorld} to "Lobby"
+			if {_targetPlayerWorldNames::*} is set:
+				set {_ownedWorlds} to "%{_targetPlayerWorldNames::*}%"
+			else:
+				set {_ownedWorlds} to "This player doesn't own any worlds :("
+			send "%nl%&e[Player Information]%nl%%nl%&eIn World: &f%{_inWorld}%%nl%&eWorlds: &f%{_targetPlayerDatas::2}%%nl%%nl%&eWorlds: &f%{_ownedWorlds}%%nl%" to executor
+		else if arg 1 is "system":
+			if executor doesn't have permission "{@systemDeveloperPermission}":
+				send "&cYou are not allowed to use this sub-command! (Require {@systemDeveloperPermission})" to executor
+				stop
+			if arg 2 is not set:
+				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|toggleSidebar|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
+				stop
+			if arg 2 is not "getSystemInformations" or "setWorldModel" or "setLobbyLocation" or "setMaximumWorlds" or "setWorldsDistance" or "setWorldsBorderSize" or "toggleSidebar" or "cancelWorldCreation" or "resetDatas":
+				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|toggleSidebar|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
+				stop
+			if arg 2 is "getSystemInformations":
+				send "&e[World System Informations]%nl%&eModel Setup: &f%check [{worldSystemData::worldModelPosition_3} is set]%%nl%&eMaximum Worlds: &f%{worldSystemData::playerMaximumWorlds}%%nl%&eWorld Distance: &f%{worldSystemData::worldDistance}%%nl%&eBorder Size: &f%{worldSystemData::worldsBorderSize}%" to executor
+			else if arg 2 is "setWorldModel":
+				if {worldSystemData::selectWorldModel_%executor's uuid%} is set:
+					send "&cYou have not done selecting world model!" to executor
+				set {worldSystemData::selectWorldModel_%executor's uuid%} to 1
+				send "&eBreak a block to set position 1." to executor
+			else if arg 2 is "setLobbyLocation":
+				set {worldSystemData::serverLobbyLocation} to executor's location
+				send "&aSuccessfully set lobby location to your location!" to executor
+				worlds_sendMessageToLog("%executor% has set lobby location to %{worldSystemData::serverLobbyLocation}%.")
+			else if arg 2 is "setMaximumWorlds":
+				if arg 3 is not set:
+					send "&cUsage: /world system setMaximumWorlds <number>" to executor
+					stop
+				set {_worldAmount} to (arg 3 parsed as number)
+				if {_worldAmount} is not set:
+					send "&cUsage: /world system setMaximumWorlds <number>" to executor
+					stop
+				set {worldSystemData::playerMaximumWorlds} to {_worldAmount}
+				send "&aSuccessfully set maximum worlds per player to %{_worldAmount}%!" to executor
+				worlds_sendMessageToLog("%executor% has set maximum worlds per player to %{_worldAmount}%.")
+			else if arg 2 is "setWorldsDistance":
+				if arg 3 is not set:
+					send "&cUsage: /world system setWorldsDistance <number>" to executor
+					stop
+				set {_worldsDistance} to (arg 3 parsed as number)
+				if {_worldsDistance} is not set:
+					send "&cUsage: /world system setWorldsDistance <number>" to executor
+					stop
+				set {worldSystemData::worldDistance} to {_worldsDistance}
+				send "&aSuccessfully set distance between worlds to %{_worldsDistance}% meters!" to executor
+				if {_worldsDistance} < 100:
+					send "&f%nl%&c&lWarning: &cSet worlds distance too low might cause%nl%&cplayers to be able to see each other's world,%nl%&crecommand set distance above 100!%nl%&f" to executor
+				worlds_sendMessageToLog("%executor% has set distance between worlds for all worlds to %{_worldsDistance}% meters.")
+			else if arg 2 is "setWorldsBorderSize":
+				if arg 3 is not set:
+					send "&cUsage: /world system setWorldsBorderSize <number>" to executor
+					stop
+				set {_borderSize} to (arg 3 parsed as number)
+				if {_borderSize} is not set:
+					send "&cUsage: /world system setWorldsBorderSize <number>" to executor
+					stop
+				set {worldSystemData::worldsBorderSize} to {_borderSize}
+				set {_worldSize} to worlds_getWorldBorderSize({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2})
+				send "&aSuccessfully set world border size to %{_borderSize}% meters!" to executor
+				if {_borderSize} < {_worldSize}:
+					send "&c&lWarning: &cSet world border size lower than %{_worldSize}% (current world model size) will cause players unable to build outside of their world." to executor
+				worlds_sendMessageToLog("%executor% has set world border size for all worlds to %{_borderSize}% meters.")
+			else if arg 2 is "toggleSidebar":
+				if {worldSystemData::toggleSidebar} is true:
+					set {worldSystemData::toggleSidebar} to false
+					send "&eYou have turned &coff &esidebar for all players!" to executor
+					loop all players:
+						worlds_removeScoreboard(loop-player)
+				else:
+					set {worldSystemData::toggleSidebar} to true
+					send "&eYou have turned &aon &esidebar for all players!" to executor
+					loop all players:
+						worlds_newScoreboard(loop-player)
+						worlds_updateScoreboard(loop-player)
+				worlds_sendMessageToLog("%executor% has toggled sidebar for all players.")
+			else if arg 2 is "cancelWorldCreation":
+				if arg 3 is not set:
+					send "&cUsage: /world system cancelWorldCreation <name>" to executor
+					stop
+				set {_targetWorldDatas::*} to worlds_getWorldDataWithName(arg 3)
+				if {_targetWorldDatas::*} is not set:
+					send "&cNot found world named %arg 3%!" to executor
+					stop
+				if {worldSystemData::worldCreateProgress_%{_targetWorldDatas::1}%} is not set:
+					send "&cWorld creation for world %{_targetWorldDatas::3}% has already ended!" to executor
+					stop
+				delete {worldSystemData::worldCreateProgress_%{_targetWorldDatas::1}%}
+				send "&aSuccessfully canceled world creation for world %{_targetWorldDatas::3}%!" to executor
+				worlds_sendMessageToLog("%executor% canceled world creation for world %{_targetWorldDatas::3}%.")
+			else if arg 2 is "resetDatas":
+				set {_datasRemoved} to worlds_removeAllData()
+				wait 1 tick
+				set {_remainDatas} to worlds_removeAllData()
+				send "&aSuccessfully deleted all datas! (total %({_datasRemoved} - {_remainDatas})% datas)" to executor
+				worlds_sendMessageToLog("%executor% has run the reset all datas command, %({_datasRemoved} - {_remainDatas})% datas has been removed.")
+
+on script load:
+	worlds_defaultDatas()
+	set {_worldsCanceled} to 0
+	loop {worldSystemData::*}:
+		set {_dataReadSplit::*} to loop-index split by "_"
+		if {_dataReadSplit::1} is "worldCreateProgress":
+			delete {worldSystemData::%loop-index%}
+			add 1 to {_worldsCanceled}
+	if {_worldsCanceled} > 0:
+		send "&c%{_worldsCanceled}% world creation(s) has been canceled due to script reload!" to all players
+		worlds_sendMessageToLog("%{_worldsCanceled}% world creation(s) has been canceled due to script reload.")
+	loop all players:
+		worlds_playerDefaultDatas(loop-player's UUID)
+		worlds_newScoreboard(loop-player)
+		worlds_updateScoreboard(loop-player)
+		worlds_updateTablist(loop-player)
+
+on script unload:
+	worlds_sendMessageToLog("Script unload has forced save players inventory data.")
+	loop all players:
+		set {_playerDatas::*} to worlds_getPlayerDatas(loop-player's UUID)	
+		set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+		if {_worldDatas::2} is (loop-player's uuid):
+			worlds_saveInventory(loop-player, {_playerDatas::4})
+		delete {_playerDatas::*}
+		delete {_worldDatas::*}
+
+on join:
+	worlds_playerDefaultDatas(player's UUID)
+	wait 5 ticks
+	teleport player to {worldSystemData::serverLobbyLocation}
+	clear player's inventory
+	set player's health to 10
+	set player's hunger to 10
+	worlds_editPlayerData((player's UUID), 4, "")
+	worlds_editPlayerData((player's UUID), 5, "FALSE")
+	worlds_editPlayerData((player's UUID), 6, "FALSE")
+	wait 5 ticks
+	worlds_newScoreboard(player)
+	wait 3 ticks
+	worlds_updateScoreboardForAll()
+	worlds_updateTablist(player)
+
+on quit:
+	set {_playerDatas::*} to worlds_getPlayerDatas(player's uuid)
+	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+	worlds_editPlayerData((player's UUID), 4, "")
+	worlds_editPlayerData((player's UUID), 5, "FALSE")
+	worlds_editPlayerData((player's UUID), 6, "FALSE")
+	worlds_updateScoreboardForAll()
+	if {_worldDatas::2} is (player's uuid):
+		worlds_saveInventory(player, {_playerDatas::4})
+		clear {_player}'s inventory
+		set {_player}'s health to 10
+		set {_player}'s hunger to 10
+
+on block break:
+	if {worldSystemData::selectWorldModel_%player's uuid%} is set:
+		cancel event
+		set {_selectedLocation} to event-block's location
+		set {_stage} to {worldSystemData::selectWorldModel_%player's uuid%}
+		set {worldSystemData::worldModelPosition_%{_stage}%} to {_selectedLocation}
+		add 1 to {worldSystemData::selectWorldModel_%player's uuid%}
+		if {_stage} is 1:
+			send "&eBreak a block to set position 2." to player
+		else if {_stage} is 2:
+			send "&eBreak a block to set spawn point." to player
+		else:
+			delete {worldSystemData::selectWorldModel_%player's uuid%}
+			send "&aYou have successfully setup the world model!" to player
+			worlds_sendMessageToLog("%player% has setup/overwrite the world model.")
+		stop
+	set {_playerDatas::*} to worlds_getPlayerDatas(player's UUID)
+	if {_playerDatas::*} is not set:
+		cancel event
+		send "&cYou are not allowed to build here!" to player
+		stop
+	if {_playerDatas::5} is "TRUE":
+		stop
+	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+	if {_worldDatas::2} is not (player's UUID):
+		cancel event
+		send "&cYou are not allowed to build in other player's world!" to player
+		stop
+	if worlds_checkInBorder(event-block's location, {_playerDatas::4}) is false:
+		cancel event
+		send "&cYou are not allowed to build outside the world border!" to player
+
+on place:
+	set {_playerDatas::*} to worlds_getPlayerDatas(player's UUID)
+	if {_playerDatas::*} is not set:
+		cancel event
+		send "&cYou are not allowed to build here!" to player
+		stop
+	if {_playerDatas::5} is "TRUE":
+		stop
+	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+	if {_worldDatas::2} is not (player's UUID):
+		cancel event
+		send "&cYou are not allowed to build in other player's world!" to player
+		stop
+	if worlds_checkInBorder(event-block's location, {_playerDatas::4}) is false:
+		cancel event
+		send "&cYou are not allowed to build outside the world border!" to player
+
+on flow:
+	set {_closestWorldID} to worlds_getClosestWorld(event-location)
+	if worlds_checkInBorder(event-location, {_closestWorldID}) is false:
+		cancel event
+
+on damage:
+	if attacker is a player:
+		set {_playerDatas::*} to worlds_getPlayerDatas(attacker's UUID)
+		if {_playerDatas::5} is "TRUE":
+			stop
+		set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+		if {_worldDatas::2} is not (attacker's UUID):
+			set {_damageCancel} to true
+			send "&cYou are not allow to damage entities in other player's world!" to attacker
+	if victim is a player:
+		if damage cause is void:
+			set {_voidTeleport} to true
+		set {_playerDatas::*} to worlds_getPlayerDatas(victim's UUID)	
+		set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+		if {_playerDatas::4} is "":
+			set {_damageCancel} to true
+		if {_worldDatas::2} is not (victim's UUID):
+			set {_damageCancel} to true
+	if {_damageCancel} is true:
+		cancel event
+		if {_voidTeleport} is true:
+			if {_playerDatas::4} is "":
+				worlds_damageEventDelayTeleport(victim, {worldSystemData::serverLobbyLocation})
+			else:
+				worlds_damageEventDelayTeleport(victim, worlds_getWorldSpawnLocation({_playerDatas::4}))
+
+function worlds_damageEventDelayTeleport(player: player, location: location):
+	wait 5 ticks
+	teleport {_player} to {_location}
+
+on drop:
+	if worlds_eventCheckAccess(player) is false:
+		cancel event
+		send "&cYou are not allowed to drop items in other player's world!" to player
+
+on pickup:
+	if worlds_eventCheckAccess(player) is false:
+		cancel event
+
+on chat:
+	set {_playerDatas::*} to worlds_getPlayerDatas(player's UUID)
+	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+	if {_worldDatas::3} is not set:
+		set {_playerWorld} to "Lobby"
+	else:
+		set {_playerWorld} to {_worldDatas::3}
+	set chat format to "&6[&e%{_playerWorld}%&6] &e%player's display name%&6: &f%message%"
+
+on death:
+	if victim is not a player:
+		stop
+	set {_playerDatas::*} to worlds_getPlayerDatas(victim's UUID)
+	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+	if {_worldDatas::3} is not set:
+		set {_playerWorld} to "Lobby"
+	else:
+		set {_playerWorld} to {_worldDatas::3}
+#	set the death message to "&e%victim% has died in world %{_playerWorld}%!"
+	set the death message to "&e%death message% in world %{_playerWorld}%!"
+	worlds_sendMessageToLog(death message)
+	wait 5 ticks
+	force victim to respawn
+
+on respawn:
+	wait 5 ticks
+	set {_playerDatas::*} to worlds_getPlayerDatas(player's UUID)
+	worlds_visitWorld(player, {_playerDatas::4}, false, true, true)
+
+on hunger meter change:
+	set {_playerDatas::*} to worlds_getPlayerDatas(player's UUID)
+	if {_playerDatas::4} is "":
+		cancel event
+		stop
+	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+	if {_worldDatas::2} is not (player's UUID):
+		cancel event
+
+on click:
+	if worlds_eventCheckAccess(player) is false:
+		cancel event
+
+on step on pressure plate:
+	if worlds_eventCheckAccess(player) is false:
+		cancel event
+
+on vehicle damage:
+	if worlds_eventCheckAccess(attacker) is false:
+		cancel event
+
+on vehicle enter:
+	set {_passengers::*} to event-entity's passenger
+	if worlds_eventCheckAccess({_passengers::1}) is false:
+		cancel event
+
+function worlds_eventCheckAccess(entity: entity) :: boolean:
+	if {_entity} is not a player:
+		return true
+	set {_targetBlock} to ({_entity}'s targeted block)
+	set {_playerDatas::*} to worlds_getPlayerDatas({_entity}'s UUID)
+	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+	if {_playerDatas::5} is "TRUE":
+		return true
+	if {_targetBlock} is set:
+		if worlds_checkInBorder(({_targetBlock}'s location), {_playerDatas::4}) is false:
+			return false
+	if {_worldDatas::2} is ({_entity}'s UUID):
+		return true
+	return false
+
+function worlds_openMenu(player: player, menuType: text, page: number, worldID: text = ""):
+	if {_menuType} is "ACTIVE_WORLDS":
+		open chest with 5 row named "&aActive Worlds &7(Online Players Worlds)" to {_player}
+	else if {_menuType} is "OWNED_WORLDS":
+		open chest with 5 row named "&aOwned Worlds &7(Your Worlds)" to {_player}
+	else if {_menuType} is "ALL_WORLDS":
+		open chest with 5 row named "&aAll Worlds &7(All Players Worlds)" to {_player}
+	else if {_menuType} is "WORLD_BANNED_PLAYERS":
+		open chest with 5 row named "&aBanned Players &7(Current World)" to {_player}
+	loop 2 times:
+		loop 9 times:
+			format a gui slot ((((loop-number-1) - 1) * 36) + ((loop-number-2) - 1)) of {_player} with white glass to do nothing
+	if {_menuType} is "ACTIVE_WORLDS":
+		set {_objects::*} to worlds_getActiveWorlds()
+		set {_displayType} to 1
+		format a gui slot 40 of {_player} with book named "&aDisplay Mode" with lore "&f||&e1. Active Worlds||&72. Owned Worlds||&73. All Worlds||&f||&7(Click to Toggle)" to close then run function worlds_openMenu({_player}, "OWNED_WORLDS", 1)
+	else if {_menuType} is "OWNED_WORLDS":
+		set {_objects::*} to worlds_getPlayerWorlds({_player}'s UUID)
+		set {_displayType} to 1
+		format a gui slot 40 of {_player} with book named "&aDisplay Mode" with lore "&f||&71. Active Worlds||&e2. Owned Worlds||&73. All Worlds||&f||&7(Click to Toggle)" to close then run function worlds_openMenu({_player}, "ALL_WORLDS", 1)
+	else if {_menuType} is "ALL_WORLDS":
+		set {_objects::*} to worlds_getAllWorlds()
+		set {_displayType} to 1
+		format a gui slot 40 of {_player} with book named "&aDisplay Mode" with lore "&f||&71. Active Worlds||&72. Owned Worlds||&e3. All Worlds||&f||&7(Click to Toggle)" to close then run function worlds_openMenu({_player}, "ACTIVE_WORLDS", 1)
+	else if {_menuType} is "WORLD_BANNED_PLAYERS":
+		set {_objects::*} to worlds_getBannedPlayerUUID({_worldID})
+		set {_displayType} to 2
+		format a gui slot 40 of {_player} with book named "&aWorld Tip" with lore "&f||&eBan players from your world||&ewith /world ban <player>" to do nothing
+	set {_currentPageItems::*} to worlds_pageSplit({_objects::*}, 27, {_page})
+	if (amount of {_currentPageItems::*}) <= 0:
+		if {_displayType} is 1:
+			format a gui slot 9 of {_player} with red glass named "&cNo worlds found!" with lore "&eCreate your own world||&ewith /world create <name>" to do nothing
+		else if {_displayType} is 2:
+			format a gui slot 9 of {_player} with red glass named "&cNo players found!" with lore "&eBan players from your world||&ewith /world ban <player>" to do nothing
+	else:
+		loop (amount of {_currentPageItems::*}) times:
+			if {_displayType} is 1:
+				set {_loopWorldDatas::*} to worlds_getWorldDatas({_currentPageItems::%loop-number%})
+				set {_worldOwner} to ({_loopWorldDatas::2} parsed as offline player)
+				set {_worldPlayers} to (amount of worlds_getPlayersInWorld({_currentPageItems::%loop-number%}))
+				format a gui slot (loop-number + 8) of {_player} with sign item named "&a%{_loopWorldDatas::3}%" with lore "&f||&eOwner: &f%{_worldOwner}%||&ePlayers: &f%{_worldPlayers}%||&f||&7Click to Visit" to close then run function worlds_visitWorld({_player}, {_currentPageItems::%loop-number%})
+			else if {_displayType} is 2:
+				set {_loopPlayer} to ({_currentPageItems::%loop-number%} parsed as offline player)
+				format a gui slot (loop-number + 8) of {_player} with ({_loopPlayer}'s skull) named "&a%{_loopPlayer}%" with lore "&f||&e(Click to unban %{_loopPlayer}%||&efrom world)" to close then run function worlds_unbanPlayer({_worldID}, {_currentPageItems::%loop-number%})
+	if {_page} <= 1:
+		format a gui slot 37 of {_player} with arrow item named "&cPrevious Page" with lore "&cYou're already on the first page!" to do nothing
+	else:
+		format a gui slot 37 of {_player} with arrow item named "&aPrevious Page" with lore "&eClick to go to the previous page." to close then run function worlds_openMenu({_player}, {_menuType}, ({_page} - 1))
+	if {_page} >= ceil((amount of {_objects::*}) / 27):
+		format a gui slot 43 of {_player} with arrow item named "&cNext Page" with lore "&cYou're already on the last page!" to do nothing
+	else:
+		format a gui slot 43 of {_player} with arrow item named "&aNext Page" with lore "&eClick to go to the next page." to close then run function worlds_openMenu({_player}, {_menuType}, ({_page} + 1))
+
+function worlds_pageSplit(objects: objects, objectsInPage: number, page: number) :: objects:
+	loop {_objectsInPage} times:
+		set {_objectNumber} to ((({_page} - 1) * {_objectsInPage}) + loop-number)
+		if {_objects::%{_objectNumber}%} is not set:
+			exit 1 loop
+		add {_objects::%{_objectNumber}%} to {_returnObjects::*}
+	return {_returnObjects::*}
+
+function worlds_visitWorld(player: player, worldID: text, visitMessage: boolean = true, bypassWorldCheck: boolean = false, bypassInventorySave: boolean = false):
+	set {_playerDatas::*} to worlds_getPlayerDatas({_player}'s UUID)
+	set {_oldWorldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	if {_bypassWorldCheck} is false:
+		if {_playerDatas::4} is {_worldID}:
+			send "&cYou are already in this world!" to {_player}
+			stop
+	if worlds_checkPlayerBanned({_worldID}, ({_player}'s UUID)) is true:
+		if {_playerDatas::5} is "TRUE":
+			set {_kickCanceled} to true
+		else:
+			send "&cYou are banned on this world!" to {_player}
+			stop
+	if {_bypassInventorySave} is false:
+		if {_oldWorldDatas::2} is ({_player}'s uuid):
+			worlds_saveInventory({_player}, {_oldWorldDatas::1})
+	clear {_player}'s inventory
+	set {_player}'s health to 10
+	set {_player}'s hunger to 10
+	set {_teleportLocation} to worlds_getWorldSpawnLocation({_worldID})
+	if block at (location 1 meter below {_teleportLocation}) is air:
+		set block at (location 1 meter below {_teleportLocation}) to bedrock
+		worlds_sendMessageToLog("No safe location found for visitors in world %{_worldDatas::3}%, system automatically generated a bedrock spawn.")
+	teleport {_player} to {_teleportLocation}
+	worlds_editPlayerData(({_player}'s UUID), 4, {_worldID})
+	worlds_updateScoreboard({_player})
+	worlds_updateTablist({_player})
+	if {_visitMessage} is false:
+		stop
+	worlds_sendMessageToLog("%{_player}% has visited world %{_worldDatas::3}%.")
+	if {_worldDatas::2} is ({_player}'s uuid):
+		send "&aYou have been teleported to your world!" to {_player}
+		worlds_loadInventory({_player}, {_worldID})
+	else:
+		set {_worldOwner} to ({_worldDatas::2} parsed as offline player)
+		send "&aYou are now visiting %{_worldOwner}%'s world!" to {_player}
+		if {_worldOwner} is online:
+			send "&e%{_player}% has visit your world %{_worldDatas::3}%!" to {_worldOwner}
+	worlds_updateScoreboardForAll()
+	if {_kickCanceled} is true:
+		worlds_sendMessageToWorld({_worldID}, "&cAdministrator mode has canceled world kick on %{_player}%!")
+		worlds_sendMessageToLog("Administrator mode has canceled world kick on %{_player}% in world %{_worldDatas::3}%.")
+
+function worlds_banPlayer(worldID: text, playerUUID: text):
+	if worlds_checkPlayerBanned({_worldID}, {_playerUUID}) is true:
+		stop
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	if {_worldDatas::5} is not set:
+		set {_bannedPlayersRaw} to {_playerUUID}
+	else if {_worldDatas::5} is "":
+		set {_bannedPlayersRaw} to {_playerUUID}
+	else:
+		set {_bannedPlayersRaw} to "%{_worldDatas::5}%,%{_playerUUID}%"
+	set {_worldDatas::5} to {_bannedPlayersRaw}
+	set {_worldDataRaw} to join {_worldDatas::*} with delimiter ":"
+	set {worldsData::%{_worldID}%} to {_worldDataRaw}
+	set {_player} to ({_playerUUID} parsed as offline player)
+	worlds_sendMessageToWorld({_worldID}, "&e%{_player}% has been banned from world %{_worldDatas::3}%!")
+	worlds_sendMessageToLog("%{_player}% has been banned from world %{_worldDatas::3}%.")
+	set {_playerDatas::*} to worlds_getPlayerDatas({_player}'s UUID)
+	if {_player} is online:
+		if {_playerDatas::5} is "TRUE":
+			worlds_sendMessageToWorld({_worldID}, "&cAdministrator mode has canceled world kick on %{_player}%!")
+			worlds_sendMessageToLog("Administrator mode has canceled world kick on %{_player}% in world %{_worldDatas::3}%.")
+		else:
+			set {_bannedPlayerDatas::*} to worlds_getPlayerDatas({_playerUUID})
+			if {_bannedPlayerDatas::4} is {_worldID}:
+				teleport {_player} to {worldSystemData::serverLobbyLocation}
+				worlds_editPlayerData({_playerUUID}, 4, "")
+				worlds_updateScoreboardForAll()
+				worlds_updateTablist({_player})
+
+function worlds_unbanPlayer(worldID: text, playerUUID: text):
+	if worlds_checkPlayerBanned({_worldID}, {_playerUUID}) is false:
+		stop
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	set {_bannedPlayerUUID::*} to {_worldDatas::5} split by ","
+	loop {_bannedPlayerUUID::*}:
+		if {_bannedPlayerUUID::%loop-index%} is {_playerUUID}:
+			delete {_bannedPlayerUUID::%loop-index%}
+	if {_bannedPlayerUUID::*} is set:
+		set {_worldDatas::5} to join {_bannedPlayerUUID::*} with delimiter ","
+	else:
+		set {_worldDatas::5} to ""
+	set {_worldDataRaw} to join {_worldDatas::*} with delimiter ":"
+	set {worldsData::%{_worldID}%} to {_worldDataRaw}
+	set {_player} to ({_playerUUID} parsed as offline player)
+	worlds_sendMessageToWorld({_worldID}, "&e%{_player}% has been unbanned from world %{_worldDatas::3}%!")
+	worlds_sendMessageToLog("%{_player}% has been unbanned from world %{_worldDatas::3}%.")
+
+function worlds_checkPlayerBanned(worldID: text, playerUUID: text) :: boolean:
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	set {_bannedPlayerUUID::*} to {_worldDatas::5} split by ","
+	loop {_bannedPlayerUUID::*}:
+		if {_bannedPlayerUUID::%loop-index%} is {_playerUUID}:
+			return true
+	return false
+
+function worlds_getBannedPlayerUUID(worldID: text) :: texts:
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	set {_bannedPlayerUUID::*} to {_worldDatas::5} split by ","
+	if {_bannedPlayerUUID::1} is "":
+		stop
+	return {_bannedPlayerUUID::*}
+
+function worlds_getEmptyID() :: text:
+	set {_x} to 0
+	while (true):
+		add 1 to {_x}
+		loop 10 times:
+			set {_y} to loop-number
+			set {_worldID} to "%{_x}%-%{_y}%"
+			if {worldsData::%{_worldID}%} is not set:
+				exit 2 loops
+	return {_worldID}
+
+function worlds_deleteWorld(worldID: text):
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	set {_playerWorldsData::*} to worlds_getPlayerWorlds({_worldDatas::2})
+	set {_playersInWorld::*} to worlds_getPlayersInWorld({_worldID})
+	loop {_playersInWorld::*}:
+		teleport {_playersInWorld::%loop-index%} to {worldSystemData::serverLobbyLocation}
+		worlds_editPlayerData(({_playersInWorld::%loop-index%}'s UUID), 4, "")
+		worlds_updateScoreboardForAll()
+		worlds_updateTablist({_playersInWorld::%loop-index%})
+	loop {_playerWorldsData::*}:
+		if {_playerWorldsData::%loop-index%} is {_worldID}:
+			delete {_playerWorldsData::%loop-index%}
+	set {_worldAmount} to (amount of {_playerWorldsData::*})
+	if {_playerWorldsData::*} is set:
+		set {_newPlayerWorldsRaw} to join {_playerWorldsData::*} with delimiter ","
+	else:
+		set {_newPlayerWorldsRaw} to ""
+	worlds_editPlayerData({_worldDatas::2}, 2, "%{_worldAmount}%")
+	worlds_editPlayerData({_worldDatas::2}, 3, {_newPlayerWorldsRaw})
+	delete {worldsData::%{_worldID}%}
+	worlds_sendMessageToLog("World named %{_worldDatas::3}% has been deleted.")
+
+function worlds_registerWorld(worldID: text, player: player, worldName: text):
+	set {_playerUUID} to {_player}'s UUID
+	set {_playerDatas::*} to worlds_getPlayerDatas({_playerUUID})
+	set {_playerWorldsAmount} to ({_playerDatas::2} parsed as number)
+	set {_playerWorldsRaw} to {_playerDatas::3}
+	set {_playerOnWorld} to {_playerDatas::4}
+	if {_playerWorldsAmount} > 0:
+		set {_playerWorldsRaw} to "%{_playerWorldsRaw}%,%{_worldID}%"
+	else:
+		set {_playerWorldsRaw} to "%{_worldID}%"
+	add 1 to {_playerWorldsAmount}
+	send "&eCreating your world..." to {_player}
+	worlds_sendMessageToLog("World creation for world %{_worldName}% has started.")
+	set {_createTime} to "%now%"
+	replace all ":" with "-" in {_createTime}
+	set {worldsData::%{_worldID}%} to "%{_worldID}%:%{_playerUUID}%:%{_worldName}%:%{_createTime}%:"
+	set {_playerDataRaw} to "%{_playerUUID}%:%{_playerWorldsAmount}%:%{_playerWorldsRaw}%:%{_playerOnWorld}%"
+	loop ((amount of {_playerDatas::*}) - 4) times:
+		set {_playerDataRaw} to "%{_playerDataRaw}%:%{_playerDatas::%(loop-number + 4)%}%"
+	set {playersData::%{_playerUUID}%} to {_playerDataRaw}
+	worlds_resetMap({_worldID})
+	set {_announceProgress} to 10
+	while true:
+		if {worldSystemData::worldCreateProgress_%{_worldID}%} is not set:
+			send "&cYour world creation has been canceled!" to {_player}
+			worlds_deleteWorld({_worldID})
+			worlds_sendMessageToLog("World creation for world %{_worldName}% has been canceled.")
+			stop
+		if {worldSystemData::worldCreateProgress_%{_worldID}%} >= {_announceProgress}:
+			set {_progressLevel} to (floor({worldSystemData::worldCreateProgress_%{_worldID}%} / 10) * 10)
+			set {_announceTimes} to ((({_progressLevel} - {_announceProgress}) / 10) + 1)
+			if {_announceTimes} > 0:
+				loop {_announceTimes} times:
+					send "&eWorld Creation: %({_announceProgress} + ((loop-number - 1) * 10))%%%" to {_player}
+				set {_announceProgress} to ({_progressLevel} + 10)
+		if {worldSystemData::worldCreateProgress_%{_worldID}%} is 100:
+			exit 1 loop
+		wait 1 second
+	send "&aYour world has successfully being created!" to {_player}
+	wait 5 ticks
+	delete {worldSystemData::worldCreateProgress_%{_worldID}%}
+	teleport {_player} to worlds_getWorldSpawnLocation({_worldID})
+	worlds_editPlayerData(({_player}'s UUID), 4, {_worldID})
+	worlds_updateScoreboard({_player})
+	worlds_updateTablist({_player})
+	worlds_sendMessageToLog("World creation for world %{_worldName}% has completed.")
+
+function worlds_editPlayerData(playerUUID: text, dataID: number, data: object):
+	set {_playerDatas::*} to worlds_getPlayerDatas({_playerUUID})
+	set {_playerDatas::%{_dataID}%} to {_data}
+	set {_playerDataRaw} to join {_playerDatas::*} with delimiter ":"
+	set {playersData::%{_playerUUID}%} to {_playerDataRaw}
+
+function worlds_resetMap(worldID: text):
+	set {_scanStartLocation} to {worldSystemData::worldModelPosition_1}
+	set {_scanEndLocation} to {worldSystemData::worldModelPosition_2}
+	set {_worldLocation} to worlds_getWorldLocation({_worldID})
+	worlds_copyMap({_scanStartLocation}, {_scanEndLocation}, {_worldLocation}, {_worldID})
+
+function worlds_getPlayerWorlds(playerUUID: text) :: texts:
+	set {_playerDatas::*} to worlds_getPlayerDatas({_playerUUID})
+	set {_worldsID::*} to {_playerDatas::3} split by ","
+	return {_worldsID::*}
+
+function worlds_getWorldDatas(worldID: text) :: texts:
+	set {_datasSplit::*} to {worldsData::%{_worldID}%} split by ":"
+	return {_datasSplit::*}
+	
+function worlds_getPlayerDatas(playerUUID: text) :: texts:
+	set {_datasSplit::*} to {playersData::%{_playerUUID}%} split by ":"
+	return {_datasSplit::*}
+
+function worlds_removeAllData() :: number:
+	set {_dataAmount} to 0
+	add (amount of {worldSystemData::*}) to {_dataAmount}
+	add (amount of {worldsData::*}) to {_dataAmount}
+	add (amount of {playersData::*}) to {_dataAmount}
+	delete {worldSystemData::*}
+	delete {worldsData::*}
+	delete {worldsInventoryData::*}
+	delete {playersData::*}
+	worlds_defaultDatas()
+	return {_dataAmount}
+
+function worlds_playerDefaultDatas(playerUUID: text):
+	set {_playerDatas::*} to {playersData::%{_playerUUID}%} split by ":"
+	set {_playerDatas::1} to (check [{_playerDatas::1} is set] ? {_playerDatas::1} : {_playerUUID})
+	set {_playerDatas::2} to (check [{_playerDatas::2} is set] ? {_playerDatas::2} : "0")
+	set {_playerDatas::3} to (check [{_playerDatas::3} is set] ? {_playerDatas::3} : "")
+	set {_playerDatas::4} to (check [{_playerDatas::4} is set] ? {_playerDatas::4} : "")
+	set {_playerDatas::5} to (check [{_playerDatas::5} is set] ? {_playerDatas::5} : "FALSE")
+	set {_playerDatas::6} to (check [{_playerDatas::6} is set] ? {_playerDatas::6} : "FALSE")
+	set {_playerDataRaw} to join {_playerDatas::*} with delimiter ":"
+	set {playersData::%{_playerUUID}%} to {_playerDataRaw}
+
+function worlds_defaultDatas():
+	set {worldSystemData::playerMaximumWorlds} to (check [{worldSystemData::playerMaximumWorlds} is set] ? {worldSystemData::playerMaximumWorlds} : 3)
+	set {worldSystemData::worldDistance} to (check [{worldSystemData::worldDistance} is set] ? {worldSystemData::worldDistance} : 500)
+	set {_defaultLobbyLocation} to location at (0, 130, 0) in world("world")
+	set {worldSystemData::serverLobbyLocation} to (check [{worldSystemData::serverLobbyLocation} is set] ? {worldSystemData::serverLobbyLocation} : {_defaultLobbyLocation})
+	set {worldSystemData::worldsBorderSize} to (check [{worldSystemData::worldsBorderSize} is set] ? {worldSystemData::worldsBorderSize} : 50)
+	set {worldSystemData::toggleSidebar} to (check [{worldSystemData::toggleSidebar} is set] ? {worldSystemData::toggleSidebar} : true)
+
+function worlds_copyMap(scanStartLocation: location, scanEndLocation: location, mapPastePoint: location, worldID: text):
+	if ({_scanStartLocation}'s y coords) < ({_scanEndLocation}'s y coords):
+		set {_tempLocation} to {_scanStartLocation}
+		set {_scanStartLocation} to {_scanEndLocation}
+		set {_scanEndLocation} to {_tempLocation}
+	set {_xDifference} to (({_mapPastePoint}'s x coords) - ({_scanStartLocation}'s x coords))
+	set {_yDifference} to (({_mapPastePoint}'s y coords) - ({_scanStartLocation}'s y coords))
+	set {_zDifference} to (({_mapPastePoint}'s z coords) - ({_scanStartLocation}'s z coords))
+	set {_floors} to (2 + round(abs(({_scanStartLocation}'s y coords) - ({_scanEndLocation}'s y coords))))
+	if {_scanStartLocation}'s x coords > {_scanEndLocation}'s x coords:
+		set {_xChange} to -1
+	else:
+		set {_xChange} to 1
+	if {_scanStartLocation}'s y coords > {_scanEndLocation}'s y coords:
+		set {_yChange} to -1
+	else:
+		set {_yChange} to 1
+	if {_scanStartLocation}'s z coords > {_scanEndLocation}'s z coords:
+		set {_zChange} to -1
+	else:
+		set {_zChange} to 1
+	set {_currentLocation} to {_scanStartLocation}
+	set {_zTimes} to (floor(abs({_scanStartLocation}'s z coords - {_scanEndLocation}'s z coords)) + 1)
+	set {_xTimes} to (floor(abs({_scanStartLocation}'s x coords - {_scanEndLocation}'s x coords)) + 1)
+	set {_totalBlocks} to ({_floors} * {_zTimes} * {_xTimes})
+	set {_doneSetBlocks} to 0
+	set {worldSystemData::worldCreateProgress_%{_worldID}%} to 0
+	loop {_floors} times:
+		loop {_zTimes} times:
+			loop {_xTimes} times:
+				set {_mapLoopBlock} to block at {_currentLocation}
+				set {_pasteLocation} to {_currentLocation}
+				set {_pasteLocation}'s x coords to (({_pasteLocation}'s x coords) + {_xDifference})
+				set {_pasteLocation}'s y coords to (({_pasteLocation}'s y coords) + {_yDifference})
+				set {_pasteLocation}'s z coords to (({_pasteLocation}'s z coords) + {_zDifference})
+				set block at {_pasteLocation} to {_mapLoopBlock}
+				if ({_mapLoopBlock}'s inventory) is set:
+					worlds_copyBlockInventory({_mapLoopBlock}, (block at {_pasteLocation}))
+				set {_currentLocation}'s x coords to ({_currentLocation}'s x coords + {_xChange})
+				add 1 to {_doneSetBlocks}
+				if {worldSystemData::worldCreateProgress_%{_worldID}%} is not set:
+					stop
+				set {worldSystemData::worldCreateProgress_%{_worldID}%} to floor(({_doneSetBlocks} / {_totalBlocks}) * 100)
+			wait 1 tick
+			set {_currentLocation}'s x coords to {_scanStartLocation}'s x coords
+			set {_currentLocation}'s z coords to ({_currentLocation}'s z coords + {_zChange})
+		set {_currentLocation} to {_scanStartLocation}
+		set {_currentLocation}'s y coords to (({_currentLocation}'s y coords) - loop-number + 1)
+		set {worldSystemData::worldCreateProgress_%{_worldID}%} to 100
+
+function worlds_copyBlockInventory(oldBlock: block, newBlock: block):
+	loop (inventory size of {_oldBlock}) times:
+		set {_loopSlot} to (loop-number - 1)
+		set slot {_loopSlot} of {_newBlock}'s inventory to (slot {_loopSlot} of {_oldBlock}'s inventory)
+
+function worlds_getModelLoadPoint(scanStartLocation: location, scanEndLocation: location) :: location:
+	if ({_scanStartLocation}'s y coords) < ({_scanEndLocation}'s y coords):
+		set {_tempLocation} to {_scanStartLocation}
+		set {_scanStartLocation} to {_scanEndLocation}
+		set {_scanEndLocation} to {_tempLocation}
+	return {_scanStartLocation}
+
+function worlds_getWorldCenter(modelLocation1: location, modelLocation2: location, worldID: text) :: location:
+	if ({_modelLocation1}'s y coords) < ({_modelLocation2}'s y coords):
+		set {_tempLocation} to {_modelLocation1}
+		set {_modelLocation1} to {_modelLocation2}
+		set {_modelLocation2} to {_tempLocation}
+	set {_xDifference} to (({_modelLocation2}'s x coords) - ({_modelLocation1}'s x coords))
+	set {_zDifference} to (({_modelLocation2}'s z coords) - ({_modelLocation1}'s z coords))
+	set {_centerLocation} to worlds_getWorldLocation({_worldID})
+	set {_centerLocation}'s x coords to (({_centerLocation}'s x coords) + ({_xDifference} / 2))
+	set {_centerLocation}'s z coords to (({_centerLocation}'s z coords) + ({_zDifference} / 2))
+	set {_blockCenter} to (block at {_centerLocation}'s location)
+	return {_blockCenter}
+
+function worlds_getWorldBorderSize(modelLocation1: location, modelLocation2: location) :: number:
+	set {_xDifference} to ((({_modelLocation2}'s x coords) - ({_modelLocation1}'s x coords)) + 1)
+	set {_zDifference} to ((({_modelLocation2}'s z coords) - ({_modelLocation1}'s z coords)) + 1)
+	set {_finalSize} to (check [{_xDifference} > {_zDifference}] ? {_xDifference} : {_zDifference})
+	return {_finalSize}
+
+function worlds_getWorldDataWithName(worldName: text) :: texts:
+	loop {worldsData::*}:
+		set {_loopWorldDatas::*} to {worldsData::%loop-index%} split by ":"
+		if {_loopWorldDatas::3} is {_worldName}:
+			return {_loopWorldDatas::*}
+
+function worlds_getWorldLocation(worldID: text) :: location:
+	set {_worldIdSplit::*} to {_worldID} split by "-"
+	loop 2 times:
+		set {_worldIdSplit::%loop-number%} to ({_worldIdSplit::%loop-number%} parsed as number)
+	set {_worldSize} to worlds_getWorldBorderSize({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2})
+	set {_locationX} to (({_worldIdSplit::1} - 1) * ({worldSystemData::worldDistance} + {_worldSize}))
+	set {_locationZ} to (({_worldIdSplit::2} - 1) * ({worldSystemData::worldDistance} + {_worldSize}))
+	set {_modelLoadLocation} to worlds_getModelLoadPoint({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2})
+	set {_location} to location at (({_locationX} + 0.5), floor({_modelLoadLocation}'s y coords), ({_locationZ} + 0.5)) in ({worldSystemData::worldModelPosition_1}'s world)
+	return {_location}
+
+function worlds_getWorldSpawnLocation(worldID: text) :: location:
+	set {_loadLocation} to worlds_getModelLoadPoint({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2})
+	set {_xDifference} to (({worldSystemData::worldModelPosition_3}'s x coords) - ({_loadLocation}'s x coords))
+	set {_yDifference} to (({worldSystemData::worldModelPosition_3}'s y coords) - ({_loadLocation}'s y coords))
+	set {_zDifference} to (({worldSystemData::worldModelPosition_3}'s z coords) - ({_loadLocation}'s z coords))
+	set {_spawnLocation} to worlds_getWorldLocation({_worldID})
+	set {_spawnLocation}'s x coords to (({_spawnLocation}'s x coords) + {_xDifference})
+	set {_spawnLocation}'s y coords to (({_spawnLocation}'s y coords) + {_yDifference})
+	set {_spawnLocation}'s z coords to (({_spawnLocation}'s z coords) + {_zDifference})
+	set {_topBlock} to {_spawnLocation}
+	loop 256 times:
+		set {_detectLocation} to location at (({_spawnLocation}'s x coords), (({_spawnLocation}'s y coords) + (loop-number)), ({_spawnLocation}'s z coords)) in ({_spawnLocation}'s world)
+		if block at {_detectLocation} is not air:
+			set {_topBlock} to {_detectLocation}
+	return (location 1.5 meters above {_topBlock})
+
+#function worlds_playerUpdateBorder(player: player, worldID: text):
+#	set {_worldCenter} to worlds_getWorldCenter({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2}, {_worldID})
+#	set {_borderSize} to worlds_getWorldBorderSize({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2})
+#	set client border center location of {_player} to {_worldCenter}
+#	set client border size of {_player} to {_borderSize}
+
+function worlds_getPlayersInWorld(worldID: text) :: players:
+	loop all players:
+		set {_loopPlayerUUID} to (loop-player's UUID)
+		if {playersData::%{_loopPlayerUUID}%} is set:
+			set {_loopPlayerDatas::*} to worlds_getPlayerDatas({_loopPlayerUUID})
+			if {_loopPlayerDatas::4} is {_worldID}:
+				add loop-player to {_return::*}
+	return {_return::*}
+
+function worlds_getActiveWorlds() :: texts:
+	loop all players:
+		set {_loopPlayerUUID} to (loop-player's UUID)
+		if {playersData::%{_loopPlayerUUID}%} is set:
+			set {_loopPlayerWorlds::*} to worlds_getPlayerWorlds({_loopPlayerUUID})
+			loop {_loopPlayerWorlds::*}:
+				set {_activeWorldID::%{_loopPlayerWorlds::%loop-index%}%} to true
+	loop {_activeWorldID::*}:
+		add loop-index to {_return::*}
+	return {_return::*}
+
+function worlds_getAllWorlds() :: texts:
+	loop {worldsData::*}:
+		add loop-index to {_return::*}
+	return {_return::*}
+
+function worlds_checkInBorder(location: location, worldID: text) :: boolean:
+	set {_worldCenter} to worlds_getWorldCenter({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2}, {_worldID})
+#	set {_worldSize} to worlds_getWorldBorderSize({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2})
+	set {_maximumMetersFromCenter} to ({worldSystemData::worldsBorderSize} / 2)
+	set {_xCheck} to (check [abs(({_worldCenter}' x coords) - ({_location}'s x coords)) <= {_maximumMetersFromCenter}] ? true : false)
+	set {_zCheck} to (check [abs(({_worldCenter}' z coords) - ({_location}'s z coords)) <= {_maximumMetersFromCenter}] ? true : false)
+	if {_xCheck} or {_zCheck} is false:
+		return false
+	return true
+
+function worlds_getClosestWorld(location: location) :: text:
+	set {_closestWorldDistance} to {worldSystemData::worldDistance}
+	loop {worldsData::*}:
+		set {_loopWorldCenter} to worlds_getWorldCenter({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2}, loop-index)
+		set {_distanceBetween} to distance between {_location} and {_loopWorldCenter}
+		if {_distanceBetween} < {_closestWorldDistance}:
+			set {_closestWorldDistance} to {_distanceBetween}
+			set {_closestWorldID} to loop-index
+	return {_closestWorldID}
+
+function worlds_sendMessageToLog(message: text):
+	loop all players:
+		set {_loopPlayerDatas::*} to worlds_getPlayerDatas(loop-player's uuid)
+		if {_loopPlayerDatas::6} is "TRUE":
+			send "&c[System Log: %now%] %{_message}%" to loop-player
+
+function worlds_sendMessageToWorld(worldID: text, message: text):
+	set {_worldPlayers::*} to worlds_getPlayersInWorld({_worldID})
+	send {_message} to {_worldPlayers::*}
+
+function worlds_updateScoreboardForAll():
+	loop all players:
+		worlds_updateScoreboard(loop-player)
+
+function worlds_newScoreboard(player: player):
+	if {worldSystemData::toggleSidebar} is false:
+		stop
+	delete stylish scoreboard "worlds-%{_player}'s UUID%"
+	create stylish scoreboard named "worlds-%{_player}'s UUID%"
+	set title of stylish scoreboard "worlds-%{_player}'s UUID%" to "&6&lWORLDS"
+	loop 12 times:
+		set {_lineID} to (16 - loop-number)
+		create a new id based score "worlds-%{_player}'s UUID%-line%{_lineID}%" with text "LINE_%{_lineID}%" slot {_lineID} for stylish scoreboard "worlds-%{_player}'s UUID%"
+	set {_player}'s stylish scoreboard to "worlds-%{_player}'s UUID%"
+
+function worlds_removeScoreboard(player: player):
+	delete stylish scoreboard "worlds-%{_player}'s UUID%"
+
+function worlds_updateScoreboard(player: player):
+	if {worldSystemData::toggleSidebar} is false:
+		stop
+	set {_playerDatas::*} to worlds_getPlayerDatas({_player}'s UUID)
+	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+	if {_playerDatas::4} is "":
+		set {_inWorld} to "Lobby"
+		set {_worldOwner} to ""
+		set {_worldPlayers} to ""
+	else:
+		set {_inWorld} to {_worldDatas::3}
+		set {_worldOwnerRaw} to ({_worldDatas::2} parsed as offline player)
+		set {_worldOwner} to "%{_worldOwnerRaw}%"
+		set {_worldPlayers} to "%(amount of worlds_getPlayersInWorld({_worldDatas::1}))%"
+	set text of id "worlds-%{_player}'s UUID%-line15" to "&7%now%"
+	set text of id "worlds-%{_player}'s UUID%-line14" to "&f"
+	set text of id "worlds-%{_player}'s UUID%-line13" to "&eName: &f%{_player}%"
+	set text of id "worlds-%{_player}'s UUID%-line12" to "&eWorlds: &f%{_playerDatas::2}%"
+	set text of id "worlds-%{_player}'s UUID%-line11" to "&4"
+	set text of id "worlds-%{_player}'s UUID%-line10" to "&eIn World: &f%{_inWorld}%"
+	set text of id "worlds-%{_player}'s UUID%-line9" to "&eWorld Owner: &f%{_worldOwner}%"
+	set text of id "worlds-%{_player}'s UUID%-line8" to "&eWorld Players: &f%{_worldPlayers}%"
+	set text of id "worlds-%{_player}'s UUID%-line7" to "&5"
+	set text of id "worlds-%{_player}'s UUID%-line6" to "&eVisit other player's world"
+	set text of id "worlds-%{_player}'s UUID%-line5" to "&ewith /world visit"
+	set text of id "worlds-%{_player}'s UUID%-line4" to "&1"
+
+function worlds_updateTablist(player: player):
+	set {_playerDatas::*} to worlds_getPlayerDatas({_player}'s UUID)
+	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+	if {_worldDatas::3} is not set:
+		set {_playerWorld} to "Lobby"
+	else:
+		set {_playerWorld} to {_worldDatas::3}
+	set ("%{_player}%" parsed as player)'s tablist name to "&6[&e%{_playerWorld}%&6] &e%{_player}'s display name%"
+
+function worlds_saveInventory(player: player, worldID: text):
+	set {_inventorySaveID} to "%{_worldID}%.%{_player}'s UUID%"
+	delete {worldsInventoryData::%{_inventorySaveID}%::*}
+	loop 36 times:
+		set {_loopSlot} to (loop-number - 1)
+		set {worldsInventoryData::%{_inventorySaveID}%::%{_loopSlot}%} to (slot {_loopSlot} of {_player}'s inventory)
+	set {worldsInventoryData::%{_inventorySaveID}%::HEALTH} to {_player}'s health
+	set {worldsInventoryData::%{_inventorySaveID}%::HUNGER} to {_player}'s hunger
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	worlds_sendMessageToLog("Saved inventory for %{_player}% in world %{_worldDatas::3}%.")
+
+function worlds_loadInventory(player: player, worldID: text):
+	clear {_player}'s inventory
+	set {_inventorySaveID} to "%{_worldID}%.%{_player}'s UUID%"
+	loop 36 times:
+		set {_loopSlot} to (loop-number - 1)
+		set slot {_loopSlot} of {_player}'s inventory to {worldsInventoryData::%{_inventorySaveID}%::%{_loopSlot}%}
+	set {_player}'s health to {worldsInventoryData::%{_inventorySaveID}%::HEALTH}
+	set {_player}'s hunger to {worldsInventoryData::%{_inventorySaveID}%::HUNGER}
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	worlds_sendMessageToLog("Loaded inventory for %{_player}% in world %{_worldDatas::3}%.")
+
+function worlds_checkAlphanumeric(text: text) :: boolean:
+	# This function is made due to Skript version 2.2-dev36 doesn't support the condition "is alphanumeric" so I made one myself
+	set {_text} to regex replace all pattern "[a-z,A-Z,0-9]" with "" in {_text}
+	if {_text} is "":
+		return true
+	return false
