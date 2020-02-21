@@ -8,10 +8,10 @@ options:
 command /world [<text>] [<text>] [<text>]:
 	trigger:
 		if arg 1 is not set:
-			send "&cUsage: /world <create|delete|visit|lobby|ban|unban|admin|logs|world|player|system> <...>" to executor
+			send "&cUsage: /world <create|delete|rename|visit|lobby|ban|unban|admin|logs|world|player|system> <...>" to executor
 			stop
-		if arg 1 is not "create" or "delete" or "visit" or "lobby" or "ban" or "unban" or "admin" or "logs" or "world" or "player" or "system":
-			send "&cUsage: /world <create|delete|visit|lobby|ban|unban|admin|logs|world|player|system> <...>" to executor
+		if arg 1 is not "create" or "delete" or "rename" or "visit" or "lobby" or "ban" or "unban" or "admin" or "logs" or "world" or "player" or "system":
+			send "&cUsage: /world <create|delete|rename|visit|lobby|ban|unban|admin|logs|world|player|system> <...>" to executor
 			stop
 		if arg 1 is "create":
 			if arg 2 is not set:
@@ -25,11 +25,14 @@ command /world [<text>] [<text>] [<text>]:
 				set {_worldOwner} to ({_checkWorldDatas::2} parsed as offline player)
 				send "&c%{_worldOwner}% has already created a world with the name!" to executor
 				stop
+			if arg 2 is "Lobby":
+				send "&cYou are not allowed to create a world with this name!" to executor
+				stop
 			if worlds_checkAlphanumeric(arg 2) is false:
 				send "&cYou are only allowed to use characters and numbers in world name!" to executor
 				stop
-			if arg 2 is "Lobby":
-				send "&cYou are not allowed to create a world with this name!" to executor
+			if (length of arg 2) > {worldSystemData::worldMaximumNameLength}:
+				send "&cYou are not allowed to create a world with name longer than %{worldSystemData::worldMaximumNameLength}% characters!" to executor
 				stop
 			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
 			set {_playerWorldsAmount} to ({_playerDatas::2} parsed as number)
@@ -66,6 +69,36 @@ command /world [<text>] [<text>] [<text>]:
 			worlds_deleteWorld({_targetWorldDatas::1})
 			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
 			send "&cYou have deleted world with name %{_targetWorldDatas::3}%! (%{_playerDatas::2}%/%{worldSystemData::playerMaximumWorlds}%)" to executor
+		else if arg 1 is "rename":
+			if arg 2 is not set:
+				send "&cUsage: /world rename <name>" to executor
+				stop
+			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
+			set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+			if {_worldDatas::2} is not (executor's uuid):
+				send "&cYou are not allowed to rename other player's world!" to executor
+				stop
+			set {_checkWorldDatas::*} to worlds_getWorldDataWithName(arg 2)
+			if {_checkWorldDatas::*} is set:
+				set {_worldOwner} to ({_checkWorldDatas::2} parsed as offline player)
+				if {_worldOwner} is executor:
+					send "&cYou have already owned a world with this name!" to executor
+				else:
+					send "&c%{_worldOwner}% has already owned a world with the name!" to executor
+				stop
+			if arg 2 is "Lobby":
+				send "&cYou are not allowed to rename your world to this name!" to executor
+				stop
+			if worlds_checkAlphanumeric(arg 2) is false:
+				send "&cYou are only allowed to use characters and numbers in world name!" to executor
+				stop
+			if (length of arg 2) > {worldSystemData::worldMaximumNameLength}:
+				send "&cYou are not allowed to rename world to name longer than %{worldSystemData::worldMaximumNameLength}% characters!" to executor
+				stop
+			worlds_editWorldData({_worldDatas::1}, 3, (arg 2))
+			send "&aYou have renamed your world to %arg 2%!" to executor
+			worlds_sendMessageToLog("%executor% has renamed world %{_worldDatas::3}% to %arg 2%.")
+			worlds_updateDisplayForAll()
 		else if arg 1 is "visit":
 			if arg 2 is not set:
 				worlds_openMenu(executor, "ACTIVE_WORLDS", 1)
@@ -93,8 +126,7 @@ command /world [<text>] [<text>] [<text>]:
 			set executor's hunger to 10
 			teleport executor to {worldSystemData::serverLobbyLocation}
 			worlds_editPlayerData((executor's UUID), 4, "")
-			worlds_updateScoreboardForAll()
-			worlds_updateTablist(executor)
+			worlds_updateDisplayForAll()
 			send "&aYou have been teleported to lobby!" to executor
 			worlds_sendMessageToLog("%executor% have been teleported to lobby.")
 		else if arg 1 is "ban":
@@ -205,10 +237,10 @@ command /world [<text>] [<text>] [<text>]:
 				send "&cYou are not allowed to use this sub-command! (Require {@systemDeveloperPermission})" to executor
 				stop
 			if arg 2 is not set:
-				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|toggleSidebar|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
+				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|setMaximumWorldsNameLength|setWorldCreationBlocksPerTick|toggleSidebar|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
 				stop
-			if arg 2 is not "getSystemInformations" or "setWorldModel" or "setLobbyLocation" or "setMaximumWorlds" or "setWorldsDistance" or "setWorldsBorderSize" or "toggleSidebar" or "cancelWorldCreation" or "resetDatas":
-				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|toggleSidebar|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
+			if arg 2 is not "getSystemInformations" or "setWorldModel" or "setLobbyLocation" or "setMaximumWorlds" or "setWorldsDistance" or "setWorldsBorderSize" or "setMaximumWorldsNameLength" or "setWorldCreationBlocksPerTick" or "toggleSidebar" or "cancelWorldCreation" or "resetDatas":
+				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|setMaximumWorldsNameLength|setWorldCreationBlocksPerTick|toggleSidebar|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
 				stop
 			if arg 2 is "getSystemInformations":
 				send "&e[World System Informations]%nl%&eModel Setup: &f%check [{worldSystemData::worldModelPosition_3} is set]%%nl%&eMaximum Worlds: &f%{worldSystemData::playerMaximumWorlds}%%nl%&eWorld Distance: &f%{worldSystemData::worldDistance}%%nl%&eBorder Size: &f%{worldSystemData::worldsBorderSize}%" to executor
@@ -259,6 +291,26 @@ command /world [<text>] [<text>] [<text>]:
 				if {_borderSize} < {_worldSize}:
 					send "&c&lWarning: &cSet world border size lower than %{_worldSize}% (current world model size) will cause players unable to build outside of their world." to executor
 				worlds_sendMessageToLog("%executor% has set world border size for all worlds to %{_borderSize}% meters.")
+			else if arg 2 is "setMaximumWorldsNameLength":
+				if arg 3 is not set:
+					send "&cUsage: /world system setMaximumWorldsNameLength <number>" to executor
+					stop
+				set {_maximumNameLength} to (arg 3 parsed as number)
+				if {_maximumNameLength} is not set:
+					send "&cUsage: /world system setMaximumWorldsNameLength <number>" to executor
+					stop
+				set {worldSystemData::worldMaximumNameLength} to {_maximumNameLength}
+				send "&aSuccessfully set maximum world name length to %{_maximumNameLength}% characters!" to executor
+			else if arg 2 is "setWorldCreationBlocksPerTick":
+				if arg 3 is not set:
+					send "&cUsage: /world system setWorldCreationBlocksPerTick <number>" to executor
+					stop
+				set {_blocksPerTick} to (arg 3 parsed as number)
+				if {_blocksPerTick} is not set:
+					send "&cUsage: /world system setWorldCreationBlocksPerTick <number>" to executor
+					stop
+				set {worldSystemData::worldCreationBlocksPerTick} to {_blocksPerTick}
+				send "&aSuccessfully set blocks per tick for world creation to %{_blocksPerTick}%!" to executor
 			else if arg 2 is "toggleSidebar":
 				if {worldSystemData::toggleSidebar} is true:
 					set {worldSystemData::toggleSidebar} to false
@@ -270,7 +322,7 @@ command /world [<text>] [<text>] [<text>]:
 					send "&eYou have turned &aon &esidebar for all players!" to executor
 					loop all players:
 						worlds_newScoreboard(loop-player)
-						worlds_updateScoreboard(loop-player)
+					worlds_updateDisplayForAll()
 				worlds_sendMessageToLog("%executor% has toggled sidebar for all players.")
 			else if arg 2 is "cancelWorldCreation":
 				if arg 3 is not set:
@@ -307,8 +359,7 @@ on script load:
 	loop all players:
 		worlds_playerDefaultDatas(loop-player's UUID)
 		worlds_newScoreboard(loop-player)
-		worlds_updateScoreboard(loop-player)
-		worlds_updateTablist(loop-player)
+	worlds_updateDisplayForAll()
 
 on script unload:
 	worlds_sendMessageToLog("Script unload has forced save players inventory data.")
@@ -333,8 +384,7 @@ on join:
 	wait 5 ticks
 	worlds_newScoreboard(player)
 	wait 3 ticks
-	worlds_updateScoreboardForAll()
-	worlds_updateTablist(player)
+	worlds_updateDisplayForAll()
 
 on quit:
 	set {_playerDatas::*} to worlds_getPlayerDatas(player's uuid)
@@ -342,7 +392,7 @@ on quit:
 	worlds_editPlayerData((player's UUID), 4, "")
 	worlds_editPlayerData((player's UUID), 5, "FALSE")
 	worlds_editPlayerData((player's UUID), 6, "FALSE")
-	worlds_updateScoreboardForAll()
+	worlds_updateDisplayForAll()
 	if {_worldDatas::2} is (player's uuid):
 		worlds_saveInventory(player, {_playerDatas::4})
 		clear {_player}'s inventory
@@ -599,8 +649,7 @@ function worlds_visitWorld(player: player, worldID: text, visitMessage: boolean 
 		worlds_sendMessageToLog("No safe location found for visitors in world %{_worldDatas::3}%, system automatically generated a bedrock spawn.")
 	teleport {_player} to {_teleportLocation}
 	worlds_editPlayerData(({_player}'s UUID), 4, {_worldID})
-	worlds_updateScoreboard({_player})
-	worlds_updateTablist({_player})
+	worlds_updateDisplayForAll()
 	if {_visitMessage} is false:
 		stop
 	worlds_sendMessageToLog("%{_player}% has visited world %{_worldDatas::3}%.")
@@ -612,7 +661,7 @@ function worlds_visitWorld(player: player, worldID: text, visitMessage: boolean 
 		send "&aYou are now visiting %{_worldOwner}%'s world!" to {_player}
 		if {_worldOwner} is online:
 			send "&e%{_player}% has visit your world %{_worldDatas::3}%!" to {_worldOwner}
-	worlds_updateScoreboardForAll()
+	worlds_updateDisplayForAll()
 	if {_kickCanceled} is true:
 		worlds_sendMessageToWorld({_worldID}, "&cAdministrator mode has canceled world kick on %{_player}%!")
 		worlds_sendMessageToLog("Administrator mode has canceled world kick on %{_player}% in world %{_worldDatas::3}%.")
@@ -643,8 +692,7 @@ function worlds_banPlayer(worldID: text, playerUUID: text):
 			if {_bannedPlayerDatas::4} is {_worldID}:
 				teleport {_player} to {worldSystemData::serverLobbyLocation}
 				worlds_editPlayerData({_playerUUID}, 4, "")
-				worlds_updateScoreboardForAll()
-				worlds_updateTablist({_player})
+				worlds_updateDisplayForAll()
 
 function worlds_unbanPlayer(worldID: text, playerUUID: text):
 	if worlds_checkPlayerBanned({_worldID}, {_playerUUID}) is false:
@@ -697,8 +745,6 @@ function worlds_deleteWorld(worldID: text):
 	loop {_playersInWorld::*}:
 		teleport {_playersInWorld::%loop-index%} to {worldSystemData::serverLobbyLocation}
 		worlds_editPlayerData(({_playersInWorld::%loop-index%}'s UUID), 4, "")
-		worlds_updateScoreboardForAll()
-		worlds_updateTablist({_playersInWorld::%loop-index%})
 	loop {_playerWorldsData::*}:
 		if {_playerWorldsData::%loop-index%} is {_worldID}:
 			delete {_playerWorldsData::%loop-index%}
@@ -710,10 +756,9 @@ function worlds_deleteWorld(worldID: text):
 	worlds_editPlayerData({_worldDatas::2}, 2, "%{_worldAmount}%")
 	worlds_editPlayerData({_worldDatas::2}, 3, {_newPlayerWorldsRaw})
 	set {_worldOwner} to ({_worldDatas::2} parsed as offline player)
-	if {_worldOwner} is online:
-		worlds_updateScoreboard({_worldOwner})
 	delete {worldsData::%{_worldID}%}
 	worlds_sendMessageToLog("World named %{_worldDatas::3}% has been deleted.")
+	worlds_updateDisplayForAll()
 
 function worlds_registerWorld(worldID: text, player: player, worldName: text):
 	set {_playerUUID} to {_player}'s UUID
@@ -758,8 +803,7 @@ function worlds_registerWorld(worldID: text, player: player, worldName: text):
 	delete {worldSystemData::worldCreateProgress_%{_worldID}%}
 	teleport {_player} to worlds_getWorldSpawnLocation({_worldID})
 	worlds_editPlayerData(({_player}'s UUID), 4, {_worldID})
-	worlds_updateScoreboard({_player})
-	worlds_updateTablist({_player})
+	worlds_updateDisplayForAll()
 	worlds_sendMessageToLog("World creation for world %{_worldName}% has completed.")
 
 function worlds_editPlayerData(playerUUID: text, dataID: number, data: object):
@@ -767,6 +811,12 @@ function worlds_editPlayerData(playerUUID: text, dataID: number, data: object):
 	set {_playerDatas::%{_dataID}%} to {_data}
 	set {_playerDataRaw} to join {_playerDatas::*} with delimiter ":"
 	set {playersData::%{_playerUUID}%} to {_playerDataRaw}
+
+function worlds_editWorldData(worldID: text, dataID: number, data: object):
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	set {_worldDatas::%{_dataID}%} to {_data}
+	set {_worldDataRaw} to join {_worldDatas::*} with delimiter ":"
+	set {worldsData::%{_worldID}%} to {_worldDataRaw}
 
 function worlds_resetMap(worldID: text):
 	set {_scanStartLocation} to {worldSystemData::worldModelPosition_1}
@@ -816,9 +866,11 @@ function worlds_defaultDatas():
 	set {_defaultLobbyLocation} to location at (0, 130, 0) in world("world")
 	set {worldSystemData::serverLobbyLocation} to (check [{worldSystemData::serverLobbyLocation} is set] ? {worldSystemData::serverLobbyLocation} : {_defaultLobbyLocation})
 	set {worldSystemData::worldsBorderSize} to (check [{worldSystemData::worldsBorderSize} is set] ? {worldSystemData::worldsBorderSize} : 50)
+	set {worldSystemData::worldMaximumNameLength} to (check [{worldSystemData::worldMaximumNameLength} is set] ? {worldSystemData::worldMaximumNameLength} : 10)
+	set {worldSystemData::worldCreationBlocksPerTick} to (check [{worldSystemData::worldCreationBlocksPerTick} is set] ? {worldSystemData::worldCreationBlocksPerTick} : 5000)
 	set {worldSystemData::toggleSidebar} to (check [{worldSystemData::toggleSidebar} is set] ? {worldSystemData::toggleSidebar} : true)
 
-function worlds_copyMap(scanStartLocation: location, scanEndLocation: location, mapPastePoint: location, worldID: text, blocksPerTick: number = 5000):
+function worlds_copyMap(scanStartLocation: location, scanEndLocation: location, mapPastePoint: location, worldID: text):
 	if ({_scanStartLocation}'s y coords) < ({_scanEndLocation}'s y coords):
 		set {_tempLocation} to {_scanStartLocation}
 		set {_scanStartLocation} to {_scanEndLocation}
@@ -843,7 +895,7 @@ function worlds_copyMap(scanStartLocation: location, scanEndLocation: location, 
 	set {_zTimes} to (floor(abs({_scanStartLocation}'s z coords - {_scanEndLocation}'s z coords)) + 1)
 	set {_xTimes} to (floor(abs({_scanStartLocation}'s x coords - {_scanEndLocation}'s x coords)) + 1)
 	set {_totalBlocks} to ({_floors} * {_zTimes} * {_xTimes})
-	set {_estimateCreationSeconds} to (({_totalBlocks} / {_blocksPerTick}) / 20)
+	set {_estimateCreationSeconds} to (({_totalBlocks} / {worldSystemData::worldCreationBlocksPerTick}) / 20)
 	worlds_sendMessageToLog("World creation of %{_totalBlocks}% blocks estimate complete in %{_estimateCreationSeconds}% seconds. (%({_estimateCreationSeconds} / 60)% minutes)")
 	set {_doneSetBlocks} to 0
 	set {_delayCount} to 0
@@ -865,7 +917,7 @@ function worlds_copyMap(scanStartLocation: location, scanEndLocation: location, 
 				if {worldSystemData::worldCreateProgress_%{_worldID}%} is not set:
 					stop
 				set {worldSystemData::worldCreateProgress_%{_worldID}%} to floor(({_doneSetBlocks} / {_totalBlocks}) * 100)
-			if {_delayCount} >= {_blocksPerTick}:
+			if {_delayCount} >= {worldSystemData::worldCreationBlocksPerTick}:
 				set {_delayCount} to 0
 				wait 1 tick
 			set {_currentLocation}'s x coords to {_scanStartLocation}'s x coords
@@ -999,9 +1051,10 @@ function worlds_sendMessageToWorld(worldID: text, message: text):
 	set {_worldPlayers::*} to worlds_getPlayersInWorld({_worldID})
 	send {_message} to {_worldPlayers::*}
 
-function worlds_updateScoreboardForAll():
+function worlds_updateDisplayForAll():
 	loop all players:
 		worlds_updateScoreboard(loop-player)
+		worlds_updateTablist(loop-player)
 
 function worlds_newScoreboard(player: player):
 	if {worldSystemData::toggleSidebar} is false:
