@@ -866,7 +866,7 @@ function worlds_defaultDatas():
 	set {_defaultLobbyLocation} to location at (0, 130, 0) in world("world")
 	set {worldSystemData::serverLobbyLocation} to (check [{worldSystemData::serverLobbyLocation} is set] ? {worldSystemData::serverLobbyLocation} : {_defaultLobbyLocation})
 	set {worldSystemData::worldsBorderSize} to (check [{worldSystemData::worldsBorderSize} is set] ? {worldSystemData::worldsBorderSize} : 50)
-	set {worldSystemData::worldMaximumNameLength} to (check [{worldSystemData::worldMaximumNameLength} is set] ? {worldSystemData::worldMaximumNameLength} : 10)
+	set {worldSystemData::worldMaximumNameLength} to (check [{worldSystemData::worldMaximumNameLength} is set] ? {worldSystemData::worldMaximumNameLength} : 15)
 	set {worldSystemData::worldCreationBlocksPerTick} to (check [{worldSystemData::worldCreationBlocksPerTick} is set] ? {worldSystemData::worldCreationBlocksPerTick} : 5000)
 	set {worldSystemData::toggleSidebar} to (check [{worldSystemData::toggleSidebar} is set] ? {worldSystemData::toggleSidebar} : true)
 
