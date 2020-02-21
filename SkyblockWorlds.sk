@@ -22,9 +22,8 @@ command /world [<text>] [<text>] [<text>]:
 				stop
 			set {_checkWorldDatas::*} to worlds_getWorldDataWithName(arg 2)
 			if {_checkWorldDatas::*} is set:
-				set {_worldOwnerNames::*} to api_getPlayerName({_checkWorldDatas::2}, false)
-				set {_worldOwnerNameAmount} to amount of {_worldOwnerNames::*}
-				send "&c%{_worldOwnerNames::%{_worldOwnerNameAmount}%}% has already created a world with the name!" to executor
+				set {_worldOwner} to ({_checkWorldDatas::2} parsed as offline player)
+				send "&c%{_worldOwner}% has already created a world with the name!" to executor
 				stop
 			if worlds_checkAlphanumeric(arg 2) is false:
 				send "&cYou are only allowed to use characters and numbers in world name!" to executor
@@ -710,6 +709,9 @@ function worlds_deleteWorld(worldID: text):
 		set {_newPlayerWorldsRaw} to ""
 	worlds_editPlayerData({_worldDatas::2}, 2, "%{_worldAmount}%")
 	worlds_editPlayerData({_worldDatas::2}, 3, {_newPlayerWorldsRaw})
+	set {_worldOwner} to ({_worldDatas::2} parsed as offline player)
+	if {_worldOwner} is online:
+		worlds_updateScoreboard({_worldOwner})
 	delete {worldsData::%{_worldID}%}
 	worlds_sendMessageToLog("World named %{_worldDatas::3}% has been deleted.")
 
@@ -750,7 +752,7 @@ function worlds_registerWorld(worldID: text, player: player, worldName: text):
 				set {_announceProgress} to ({_progressLevel} + 10)
 		if {worldSystemData::worldCreateProgress_%{_worldID}%} is 100:
 			exit 1 loop
-		wait 1 second
+		wait 5 ticks
 	send "&aYour world has successfully being created!" to {_player}
 	wait 5 ticks
 	delete {worldSystemData::worldCreateProgress_%{_worldID}%}
@@ -816,7 +818,7 @@ function worlds_defaultDatas():
 	set {worldSystemData::worldsBorderSize} to (check [{worldSystemData::worldsBorderSize} is set] ? {worldSystemData::worldsBorderSize} : 50)
 	set {worldSystemData::toggleSidebar} to (check [{worldSystemData::toggleSidebar} is set] ? {worldSystemData::toggleSidebar} : true)
 
-function worlds_copyMap(scanStartLocation: location, scanEndLocation: location, mapPastePoint: location, worldID: text):
+function worlds_copyMap(scanStartLocation: location, scanEndLocation: location, mapPastePoint: location, worldID: text, blocksPerTick: number = 5000):
 	if ({_scanStartLocation}'s y coords) < ({_scanEndLocation}'s y coords):
 		set {_tempLocation} to {_scanStartLocation}
 		set {_scanStartLocation} to {_scanEndLocation}
@@ -841,7 +843,10 @@ function worlds_copyMap(scanStartLocation: location, scanEndLocation: location, 
 	set {_zTimes} to (floor(abs({_scanStartLocation}'s z coords - {_scanEndLocation}'s z coords)) + 1)
 	set {_xTimes} to (floor(abs({_scanStartLocation}'s x coords - {_scanEndLocation}'s x coords)) + 1)
 	set {_totalBlocks} to ({_floors} * {_zTimes} * {_xTimes})
+	set {_estimateCreationSeconds} to (({_totalBlocks} / {_blocksPerTick}) / 20)
+	worlds_sendMessageToLog("World creation of %{_totalBlocks}% blocks estimate complete in %{_estimateCreationSeconds}% seconds. (%({_estimateCreationSeconds} / 60)% minutes)")
 	set {_doneSetBlocks} to 0
+	set {_delayCount} to 0
 	set {worldSystemData::worldCreateProgress_%{_worldID}%} to 0
 	loop {_floors} times:
 		loop {_zTimes} times:
@@ -856,10 +861,13 @@ function worlds_copyMap(scanStartLocation: location, scanEndLocation: location, 
 					worlds_copyBlockInventory({_mapLoopBlock}, (block at {_pasteLocation}))
 				set {_currentLocation}'s x coords to ({_currentLocation}'s x coords + {_xChange})
 				add 1 to {_doneSetBlocks}
+				add 1 to {_delayCount}
 				if {worldSystemData::worldCreateProgress_%{_worldID}%} is not set:
 					stop
 				set {worldSystemData::worldCreateProgress_%{_worldID}%} to floor(({_doneSetBlocks} / {_totalBlocks}) * 100)
-			wait 1 tick
+			if {_delayCount} >= {_blocksPerTick}:
+				set {_delayCount} to 0
+				wait 1 tick
 			set {_currentLocation}'s x coords to {_scanStartLocation}'s x coords
 			set {_currentLocation}'s z coords to ({_currentLocation}'s z coords + {_zChange})
 		set {_currentLocation} to {_scanStartLocation}
