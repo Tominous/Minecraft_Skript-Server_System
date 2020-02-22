@@ -243,7 +243,7 @@ command /world [<text>] [<text>] [<text>]:
 				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|setMaximumWorldsNameLength|setWorldCreationBlocksPerTick|toggleSidebar|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
 				stop
 			if arg 2 is "getSystemInformations":
-				send "&e[World System Informations]%nl%&eModel Setup: &f%check [{worldSystemData::worldModelPosition_3} is set]%%nl%&eMaximum Worlds: &f%{worldSystemData::playerMaximumWorlds}%%nl%&eWorld Distance: &f%{worldSystemData::worldDistance}%%nl%&eBorder Size: &f%{worldSystemData::worldsBorderSize}%" to executor
+				send "&e[World System Informations]%nl%&eModel Setup: &f%check [{worldSystemData::worldModelPosition_3} is set]%%nl%&eLobby Location: &f%{worldSystemData::serverLobbyLocation}%%nl%&eMaximum Worlds: &f%{worldSystemData::playerMaximumWorlds}%%nl%&eWorld Distance: &f%{worldSystemData::worldDistance}%%nl%&eBorder Size: &f%{worldSystemData::worldsBorderSize}%%nl%&eMaximum World Name Length: &f%{worldSystemData::worldMaximumNameLength}%%nl%&eWorld Creation Blocks Per Tick: &f%{worldSystemData::worldCreationBlocksPerTick}%%nl%&eSidebar Toggle: &f%{worldSystemData::toggleSidebar}%" to executor
 			else if arg 2 is "setWorldModel":
 				if {worldSystemData::selectWorldModel_%executor's uuid%} is set:
 					send "&cYou have not done selecting world model!" to executor
@@ -843,6 +843,8 @@ function worlds_removeAllData() :: number:
 	add (amount of {worldsData::*}) to {_dataAmount}
 	add (amount of {playersData::*}) to {_dataAmount}
 	delete {worldSystemData::*}
+	loop {worldsData::*}:
+		add worlds_deleteWorldInventoryData(loop-index) to {_dataAmount}
 	delete {worldsData::*}
 	delete {worldsInventoryData::*}
 	delete {playersData::*}
@@ -1127,6 +1129,13 @@ function worlds_loadInventory(player: player, worldID: text):
 	set {_player}'s hunger to {worldsInventoryData::%{_inventorySaveID}%::HUNGER}
 	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
 	worlds_sendMessageToLog("Loaded inventory for %{_player}% in world %{_worldDatas::3}%.")
+
+function worlds_deleteWorldInventoryData(worldID: text) :: number:
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	set {_inventorySaveID} to "%{_worldID}%.%{_worldDatas::2}%"
+	set {_datasAmount} to (amount of {worldsInventoryData::%{_inventorySaveID}%::*})
+	delete {worldsInventoryData::%{_inventorySaveID}%::*}
+	return {_datasAmount}
 
 function worlds_checkAlphanumeric(text: text) :: boolean:
 	# This function is made due to Skript version 2.2-dev36 doesn't support the condition "is alphanumeric" so I made one myself
