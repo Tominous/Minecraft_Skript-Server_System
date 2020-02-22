@@ -1,5 +1,5 @@
 # PLAYER DATA: <PLAYER UUID>:<WORLDS AMOUNT>:<WORLDS>:<CURRENT IN WORLD ID>:<ADMIN MODE>:<LOGS MODE>
-# WORLD DATA: <WORLD ID>:<WORLD OWNER UUID>:<WORLD NAME>:<WORLD CREATE TIME>:<BANNED PLAYER UUIDS>
+# WORLD DATA: <WORLD ID>:<WORLD OWNER UUID>:<WORLD NAME>:<WORLD CREATE TIME>:<HAVE ACCESS PLAYER UUIDS>:<BANNED PLAYER UUIDS>
 
 options:
 	systemAdministratorPermission: worlds.administrator
@@ -8,10 +8,10 @@ options:
 command /world [<text>] [<text>] [<text>]:
 	trigger:
 		if arg 1 is not set:
-			send "&cUsage: /world <create|delete|rename|visit|lobby|ban|unban|admin|logs|world|player|system> <...>" to executor
+			send "&cUsage: /world <create|delete|rename|visit|lobby|partner|ban|unban|admin|logs|world|player|system> <...>" to executor
 			stop
-		if arg 1 is not "create" or "delete" or "rename" or "visit" or "lobby" or "ban" or "unban" or "admin" or "logs" or "world" or "player" or "system":
-			send "&cUsage: /world <create|delete|rename|visit|lobby|ban|unban|admin|logs|world|player|system> <...>" to executor
+		if arg 1 is not "create" or "delete" or "rename" or "visit" or "lobby" or "partner" or "ban" or "unban" or "admin" or "logs" or "world" or "player" or "system":
+			send "&cUsage: /world <create|delete|rename|visit|lobby|partner|ban|unban|admin|logs|world|player|system> <...>" to executor
 			stop
 		if arg 1 is "create":
 			if arg 2 is not set:
@@ -120,23 +120,60 @@ command /world [<text>] [<text>] [<text>]:
 			if {_playerDatas::4} is "":
 				send "&cYou are already in lobby!" to executor
 				stop
-			worlds_saveInventory(executor, {_playerDatas::4})
-			clear executor's inventory
-			set executor's health to 10
-			set executor's hunger to 10
+			if worlds_checkWorldPartner({_playerDatas::4}, (executor's UUID)) is true:
+				worlds_saveInventory(executor, {_playerDatas::4})
+			worlds_resetCurrentInventory(executor)
 			teleport executor to {worldSystemData::serverLobbyLocation}
 			worlds_editPlayerData((executor's UUID), 4, "")
 			worlds_updateDisplayForAll()
 			send "&aYou have been teleported to lobby!" to executor
 			worlds_sendMessageToLog("%executor% have been teleported to lobby.")
-		else if arg 1 is "ban":
+		else if arg 1 is "partner":
 			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
 			set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
 			if {_worldDatas::2} is not (executor's uuid):
-				send "&cYou are not allowed to ban players in other player's world!" to executor
+				send "&cYou are not allowed to manage partners in other player's world!" to executor
 				stop
 			if arg 2 is not set:
+				send "&cUsage: /world partner <add/remove> <player>" to executor
+				stop
+			if arg 2 is not "add" or "remove":
+				send "&cUsage: /world partner <add/remove> <player>" to executor
+				stop
+			if arg 2 is "add":
+				if arg 3 is not set:
+					send "&cUsage: /world partner add <player>" to executor
+					stop
+				set {_targetPlayer} to (arg 3 parsed as offline player)
+				if {_targetPlayer} is not set:
+					send "&cNot found player with name %arg 3%!" to executor
+					stop
+				if worlds_checkWorldPartner({_playerDatas::4}, ({_targetPlayer}'s UUID)) is true:
+					send "&cThis player is already partner of this world!" to executor
+					stop
+				worlds_addPartner({_playerDatas::4}, ({_targetPlayer}'s UUID))
+				send "&aYou have set %{_targetPlayer}% to a partner!" to executor
+			else if arg 2 is "remove":
+				if arg 3 is not set:
+					worlds_openMenu(executor, "WORLD_PARTNERS", 1, {_playerDatas::4})
+					stop
+				set {_targetPlayer} to (arg 3 parsed as offline player)
+				if {_targetPlayer} is not set:
+					send "&cNot found player with name %arg 3%!" to executor
+					stop
+				if worlds_checkWorldPartner({_playerDatas::4}, ({_targetPlayer}'s UUID)) is false:
+					send "&cThis player is not a partner of this world!" to executor
+					stop
+				worlds_removePartner({_playerDatas::4}, ({_targetPlayer}'s UUID))
+				send "&aYou have removed %{_targetPlayer}% from partners!" to executor
+		else if arg 1 is "ban":
+			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
+			set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
+			if arg 2 is not set:
 				send "&cUsage: /world ban <player>" to executor
+				stop
+			if worlds_checkWorldPartner({_playerDatas::4}, (executor's UUID)) is false:
+				send "&cYou need to be world owner or partner to ban players in this world!" to executor
 				stop
 			set {_targetPlayer} to (arg 2 parsed as offline player)
 			if {_targetPlayer} is not set:
@@ -146,14 +183,17 @@ command /world [<text>] [<text>] [<text>]:
 				send "&cThis player is already banned!" to executor
 				stop
 			if executor is {_targetPlayer}:
-				send "&cYou aren't allowed to ban yourself!" to executor
+				send "&cYou are not allowed to ban yourself!" to executor
+				stop
+			else if worlds_checkWorldPartner({_playerDatas::4}, ({_targetPlayer}'s UUID)) is true:
+				send "&cYou are not allowed to ban partners in this world!" to executor
 				stop
 			worlds_banPlayer({_playerDatas::4}, ({_targetPlayer}'s UUID))
 		else if arg 1 is "unban":
 			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
 			set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
-			if {_worldDatas::2} is not (executor's uuid):
-				send "&cYou are not allowed to unban players in other player's world!" to executor
+			if worlds_checkWorldPartner({_playerDatas::4}, (executor's UUID)) is false:
+				send "&cYou need to be world owner or partner to unban players in this world!" to executor
 				stop
 			if arg 2 is not set:
 				worlds_openMenu(player, "WORLD_BANNED_PLAYERS", 1, {_playerDatas::4})
@@ -365,19 +405,18 @@ on script unload:
 	worlds_sendMessageToLog("Script unload has forced save players inventory data.")
 	loop all players:
 		set {_playerDatas::*} to worlds_getPlayerDatas(loop-player's UUID)	
-		set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
-		if {_worldDatas::2} is (loop-player's uuid):
+		if worlds_checkWorldPartner({_playerDatas::4}, (loop-player's UUID)) is true:
 			worlds_saveInventory(loop-player, {_playerDatas::4})
 		delete {_playerDatas::*}
-		delete {_worldDatas::*}
+
+every 1 minute:
+	worlds_updateDisplayForAll()
 
 on join:
 	worlds_playerDefaultDatas(player's UUID)
 	wait 5 ticks
 	teleport player to {worldSystemData::serverLobbyLocation}
-	clear player's inventory
-	set player's health to 10
-	set player's hunger to 10
+	worlds_resetCurrentInventory(player)
 	worlds_editPlayerData((player's UUID), 4, "")
 	worlds_editPlayerData((player's UUID), 5, "FALSE")
 	worlds_editPlayerData((player's UUID), 6, "FALSE")
@@ -388,16 +427,13 @@ on join:
 
 on quit:
 	set {_playerDatas::*} to worlds_getPlayerDatas(player's uuid)
-	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
 	worlds_editPlayerData((player's UUID), 4, "")
 	worlds_editPlayerData((player's UUID), 5, "FALSE")
 	worlds_editPlayerData((player's UUID), 6, "FALSE")
 	worlds_updateDisplayForAll()
-	if {_worldDatas::2} is (player's uuid):
+	if worlds_checkWorldPartner({_playerDatas::4}, (player's UUID)) is true:
 		worlds_saveInventory(player, {_playerDatas::4})
-		clear {_player}'s inventory
-		set {_player}'s health to 10
-		set {_player}'s hunger to 10
+		worlds_resetCurrentInventory(player)
 
 on block break:
 	if {worldSystemData::selectWorldModel_%player's uuid%} is set:
@@ -418,32 +454,24 @@ on block break:
 	set {_playerDatas::*} to worlds_getPlayerDatas(player's UUID)
 	if {_playerDatas::*} is not set:
 		cancel event
-		send "&cYou are not allowed to build here!" to player
 		stop
 	if {_playerDatas::5} is "TRUE":
 		stop
-	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
-	if {_worldDatas::2} is not (player's UUID):
+	if worlds_checkWorldPartner({_playerDatas::4}, (player's UUID)) is false:
 		cancel event
-		send "&cYou are not allowed to build in other player's world!" to player
-		stop
 	if worlds_checkInBorder(event-block's location, {_playerDatas::4}) is false:
 		cancel event
-		send "&cYou are not allowed to build outside the world border!" to player
+		send "&cYou are not allowed to break blocks outside the world border!" to player
 
 on place:
 	set {_playerDatas::*} to worlds_getPlayerDatas(player's UUID)
 	if {_playerDatas::*} is not set:
 		cancel event
-		send "&cYou are not allowed to build here!" to player
 		stop
 	if {_playerDatas::5} is "TRUE":
 		stop
-	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
-	if {_worldDatas::2} is not (player's UUID):
+	if worlds_checkWorldPartner({_playerDatas::4}, (player's UUID)) is false:
 		cancel event
-		send "&cYou are not allowed to build in other player's world!" to player
-		stop
 	if worlds_checkInBorder(event-block's location, {_playerDatas::4}) is false:
 		cancel event
 		send "&cYou are not allowed to build outside the world border!" to player
@@ -459,7 +487,7 @@ on damage:
 		if {_playerDatas::5} is "TRUE":
 			stop
 		set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
-		if {_worldDatas::2} is not (attacker's UUID):
+		if worlds_checkWorldPartner({_playerDatas::4}, (attacker's UUID)) is false:
 			set {_damageCancel} to true
 			send "&cYou are not allow to damage entities in other player's world!" to attacker
 	if victim is a player:
@@ -469,7 +497,7 @@ on damage:
 		set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
 		if {_playerDatas::4} is "":
 			set {_damageCancel} to true
-		if {_worldDatas::2} is not (victim's UUID):
+		if worlds_checkWorldPartner({_playerDatas::4}, (victim's UUID)) is false:
 			set {_damageCancel} to true
 	if {_damageCancel} is true:
 		cancel event
@@ -552,13 +580,12 @@ function worlds_eventCheckAccess(entity: entity) :: boolean:
 		return true
 	set {_targetBlock} to ({_entity}'s targeted block)
 	set {_playerDatas::*} to worlds_getPlayerDatas({_entity}'s UUID)
-	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
 	if {_playerDatas::5} is "TRUE":
 		return true
 	if {_targetBlock} is set:
 		if worlds_checkInBorder(({_targetBlock}'s location), {_playerDatas::4}) is false:
 			return false
-	if {_worldDatas::2} is ({_entity}'s UUID):
+	if worlds_checkWorldPartner({_playerDatas::4}, ({_entity}'s UUID)) is true:
 		return true
 	return false
 
@@ -571,6 +598,8 @@ function worlds_openMenu(player: player, menuType: text, page: number, worldID: 
 		open chest with 5 row named "&aAll Worlds &7(All Players Worlds)" to {_player}
 	else if {_menuType} is "WORLD_BANNED_PLAYERS":
 		open chest with 5 row named "&aBanned Players &7(Current World)" to {_player}
+	else if {_menuType} is "WORLD_PARTNERS":
+		open chest with 5 row named "&aWorld Partners &7(Current World)" to {_player}
 	loop 2 times:
 		loop 9 times:
 			format a gui slot ((((loop-number-1) - 1) * 36) + ((loop-number-2) - 1)) of {_player} with white glass to do nothing
@@ -590,12 +619,18 @@ function worlds_openMenu(player: player, menuType: text, page: number, worldID: 
 		set {_objects::*} to worlds_getBannedPlayerUUID({_worldID})
 		set {_displayType} to 2
 		format a gui slot 40 of {_player} with book named "&aWorld Tip" with lore "&f||&eBan players from your world||&ewith /world ban <player>" to do nothing
+	else if {_menuType} is "WORLD_PARTNERS":
+		set {_objects::*} to worlds_getWorldPartners({_worldID})
+		set {_displayType} to 3
+		format a gui slot 40 of {_player} with book named "&aWorld Tip" with lore "&f||&eAdd partners to your world||&ewith /world partner add <player>" to do nothing
 	set {_currentPageItems::*} to worlds_pageSplit({_objects::*}, 27, {_page})
 	if (amount of {_currentPageItems::*}) <= 0:
 		if {_displayType} is 1:
 			format a gui slot 9 of {_player} with red glass named "&cNo worlds found!" with lore "&eCreate your own world||&ewith /world create <name>" to do nothing
 		else if {_displayType} is 2:
 			format a gui slot 9 of {_player} with red glass named "&cNo players found!" with lore "&eBan players from your world||&ewith /world ban <player>" to do nothing
+		else if {_displayType} is 3:
+			format a gui slot 9 of {_player} with red glass named "&cNo players found!" with lore "&eAdd partners to your world||&ewith /world partner add <player>" to do nothing
 	else:
 		loop (amount of {_currentPageItems::*}) times:
 			if {_displayType} is 1:
@@ -603,9 +638,12 @@ function worlds_openMenu(player: player, menuType: text, page: number, worldID: 
 				set {_worldOwner} to ({_loopWorldDatas::2} parsed as offline player)
 				set {_worldPlayers} to (amount of worlds_getPlayersInWorld({_currentPageItems::%loop-number%}))
 				format a gui slot (loop-number + 8) of {_player} with sign item named "&a%{_loopWorldDatas::3}%" with lore "&f||&eOwner: &f%{_worldOwner}%||&ePlayers: &f%{_worldPlayers}%||&f||&7Click to Visit" to close then run function worlds_visitWorld({_player}, {_currentPageItems::%loop-number%})
-			else if {_displayType} is 2:
+			else if {_displayType} is 2 or 3:
 				set {_loopPlayer} to ({_currentPageItems::%loop-number%} parsed as offline player)
-				format a gui slot (loop-number + 8) of {_player} with ({_loopPlayer}'s skull) named "&a%{_loopPlayer}%" with lore "&f||&e(Click to unban %{_loopPlayer}%||&efrom world)" to close then run function worlds_unbanPlayer({_worldID}, {_currentPageItems::%loop-number%})
+				if {_displayType} is 2:
+					format a gui slot (loop-number + 8) of {_player} with ({_loopPlayer}'s skull) named "&a%{_loopPlayer}%" with lore "&f||&e(Click to unban %{_loopPlayer}%||&efrom world)" to close then run function worlds_unbanPlayer({_worldID}, {_currentPageItems::%loop-number%})
+				else:
+					format a gui slot (loop-number + 8) of {_player} with ({_loopPlayer}'s skull) named "&a%{_loopPlayer}%" with lore "&f||&e(Click to remove partner||&e%{_loopPlayer}% from world)" to close then run function worlds_removePartner({_worldID}, {_currentPageItems::%loop-number%})
 	if {_page} <= 1:
 		format a gui slot 37 of {_player} with arrow item named "&cPrevious Page" with lore "&cYou're already on the first page!" to do nothing
 	else:
@@ -638,11 +676,9 @@ function worlds_visitWorld(player: player, worldID: text, visitMessage: boolean 
 			send "&cYou are banned on this world!" to {_player}
 			stop
 	if {_bypassInventorySave} is false:
-		if {_oldWorldDatas::2} is ({_player}'s uuid):
+		if worlds_checkWorldPartner({_playerDatas::4}, ({_player}'s UUID)) is true:
 			worlds_saveInventory({_player}, {_oldWorldDatas::1})
-	clear {_player}'s inventory
-	set {_player}'s health to 10
-	set {_player}'s hunger to 10
+	worlds_resetCurrentInventory({_player})
 	set {_teleportLocation} to worlds_getWorldSpawnLocation({_worldID})
 	if block at (location 1 meter below {_teleportLocation}) is air:
 		set block at (location 1 meter below {_teleportLocation}) to bedrock
@@ -656,27 +692,83 @@ function worlds_visitWorld(player: player, worldID: text, visitMessage: boolean 
 	if {_worldDatas::2} is ({_player}'s uuid):
 		send "&aYou have been teleported to your world!" to {_player}
 		worlds_loadInventory({_player}, {_worldID})
+	else if worlds_checkWorldPartner({_worldDatas::1}, ({_player}'s UUID)) is true:
+		set {_worldOwner} to ({_worldDatas::2} parsed as offline player)
+		send "&aYou have been teleported to %{_worldOwner}%'s world!%nl%&eYou are a partner in this world." to {_player}
+		worlds_loadInventory({_player}, {_worldID})
+		if {_worldOwner} is online:
+			send "&e%{_player}% (Partner) has visit your world %{_worldDatas::3}%!" to {_worldOwner}
 	else:
 		set {_worldOwner} to ({_worldDatas::2} parsed as offline player)
 		send "&aYou are now visiting %{_worldOwner}%'s world!" to {_player}
 		if {_worldOwner} is online:
 			send "&e%{_player}% has visit your world %{_worldDatas::3}%!" to {_worldOwner}
+	worlds_sendMessageToWorld({_worldID}, "&e%{_player}% has teleported to this world!")
 	worlds_updateDisplayForAll()
 	if {_kickCanceled} is true:
 		worlds_sendMessageToWorld({_worldID}, "&cAdministrator mode has canceled world kick on %{_player}%!")
 		worlds_sendMessageToLog("Administrator mode has canceled world kick on %{_player}% in world %{_worldDatas::3}%.")
 
+function worlds_checkWorldPartner(worldID: text, playerUUID: text) :: boolean:
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	set {_partnerUUID::*} to {_worldDatas::5} split by ","
+	loop {_partnerUUID::*}:
+		if {_partnerUUID::%loop-index%} is {_playerUUID}:
+			return true
+	return false
+
+function worlds_addPartner(worldID: text, playerUUID: text):
+	set {_player} to ({_playerUUID} parsed as offline player)
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	if worlds_checkPlayerBanned({_worldID}, {_playerUUID}) is true:
+		worlds_unbanPlayer({_worldID}, {_playerUUID})
+		worlds_sendMessageToLog("%{_player}% has been force unbanned in world %{_worldDatas::3}% due to being added as a partner.")
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	if {_worldDatas::5} is "":
+		set {_worldDatas::5} to {_playerUUID}
+	else:
+		set {_worldDatas::5} to "%{_worldDatas::5}%,%{_playerUUID}%"
+	set {_worldDataRaw} to join {_worldDatas::*} with delimiter ":"
+	set {worldsData::%{_worldID}%} to {_worldDataRaw}
+	worlds_sendMessageToWorld({_worldID}, "&e%{_player}% has been added to partners in world %{_worldDatas::3}%!")
+	worlds_sendMessageToLog("%{_player}% has been added to partners in world %{_worldDatas::3}%.")
+
+function worlds_removePartner(worldID: text, playerUUID: text):
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	set {_worldPartnerUUID::*} to {_worldDatas::5} split by ","
+	loop {_worldPartnerUUID::*}:
+		if {_worldPartnerUUID::%loop-index%} is {_playerUUID}:
+			delete {_worldPartnerUUID::%loop-index%}
+	set {_worldDatas::5} to join {_worldPartnerUUID::*} with delimiter ","
+	set {_worldDataRaw} to join {_worldDatas::*} with delimiter ":"
+	set {worldsData::%{_worldID}%} to {_worldDataRaw}
+	set {_player} to ({_playerUUID} parsed as offline player)
+	worlds_deleteInventoryData({_worldID}, {_playerUUID})
+	if {_player} is online:
+		worlds_resetCurrentInventory({_player})
+	worlds_sendMessageToWorld({_worldID}, "&e%{_player}% has been removed from partners in world %{_worldDatas::3}%!")
+	worlds_sendMessageToLog("%{_player}% has been removed from partners in world %{_worldDatas::3}%.")
+
+function worlds_getWorldPartners(worldID: text, includeOwner: boolean = false) :: texts:
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	set {_worldPartnerUUID::*} to {_worldDatas::5} split by ","
+	if {_includeOwner} is false:
+		loop {_worldPartnerUUID::*}:
+			if {_worldPartnerUUID::%loop-index%} is {_worldDatas::2}:
+				delete {_worldPartnerUUID::%loop-index%}
+	return {_worldPartnerUUID::*}
+
 function worlds_banPlayer(worldID: text, playerUUID: text):
 	if worlds_checkPlayerBanned({_worldID}, {_playerUUID}) is true:
 		stop
 	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
-	if {_worldDatas::5} is not set:
+	if {_worldDatas::6} is not set:
 		set {_bannedPlayersRaw} to {_playerUUID}
-	else if {_worldDatas::5} is "":
+	else if {_worldDatas::6} is "":
 		set {_bannedPlayersRaw} to {_playerUUID}
 	else:
-		set {_bannedPlayersRaw} to "%{_worldDatas::5}%,%{_playerUUID}%"
-	set {_worldDatas::5} to {_bannedPlayersRaw}
+		set {_bannedPlayersRaw} to "%{_worldDatas::6}%,%{_playerUUID}%"
+	set {_worldDatas::6} to {_bannedPlayersRaw}
 	set {_worldDataRaw} to join {_worldDatas::*} with delimiter ":"
 	set {worldsData::%{_worldID}%} to {_worldDataRaw}
 	set {_player} to ({_playerUUID} parsed as offline player)
@@ -698,14 +790,14 @@ function worlds_unbanPlayer(worldID: text, playerUUID: text):
 	if worlds_checkPlayerBanned({_worldID}, {_playerUUID}) is false:
 		stop
 	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
-	set {_bannedPlayerUUID::*} to {_worldDatas::5} split by ","
+	set {_bannedPlayerUUID::*} to {_worldDatas::6} split by ","
 	loop {_bannedPlayerUUID::*}:
 		if {_bannedPlayerUUID::%loop-index%} is {_playerUUID}:
 			delete {_bannedPlayerUUID::%loop-index%}
 	if {_bannedPlayerUUID::*} is set:
-		set {_worldDatas::5} to join {_bannedPlayerUUID::*} with delimiter ","
+		set {_worldDatas::6} to join {_bannedPlayerUUID::*} with delimiter ","
 	else:
-		set {_worldDatas::5} to ""
+		set {_worldDatas::6} to ""
 	set {_worldDataRaw} to join {_worldDatas::*} with delimiter ":"
 	set {worldsData::%{_worldID}%} to {_worldDataRaw}
 	set {_player} to ({_playerUUID} parsed as offline player)
@@ -714,7 +806,7 @@ function worlds_unbanPlayer(worldID: text, playerUUID: text):
 
 function worlds_checkPlayerBanned(worldID: text, playerUUID: text) :: boolean:
 	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
-	set {_bannedPlayerUUID::*} to {_worldDatas::5} split by ","
+	set {_bannedPlayerUUID::*} to {_worldDatas::6} split by ","
 	loop {_bannedPlayerUUID::*}:
 		if {_bannedPlayerUUID::%loop-index%} is {_playerUUID}:
 			return true
@@ -722,7 +814,7 @@ function worlds_checkPlayerBanned(worldID: text, playerUUID: text) :: boolean:
 
 function worlds_getBannedPlayerUUID(worldID: text) :: texts:
 	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
-	set {_bannedPlayerUUID::*} to {_worldDatas::5} split by ","
+	set {_bannedPlayerUUID::*} to {_worldDatas::6} split by ","
 	if {_bannedPlayerUUID::1} is "":
 		stop
 	return {_bannedPlayerUUID::*}
@@ -742,9 +834,11 @@ function worlds_deleteWorld(worldID: text):
 	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
 	set {_playerWorldsData::*} to worlds_getPlayerWorlds({_worldDatas::2})
 	set {_playersInWorld::*} to worlds_getPlayersInWorld({_worldID})
+	worlds_deleteWorldInventoryData({_worldID})
 	loop {_playersInWorld::*}:
 		teleport {_playersInWorld::%loop-index%} to {worldSystemData::serverLobbyLocation}
 		worlds_editPlayerData(({_playersInWorld::%loop-index%}'s UUID), 4, "")
+		worlds_resetCurrentInventory({_playersInWorld::%loop-index%})
 	loop {_playerWorldsData::*}:
 		if {_playerWorldsData::%loop-index%} is {_worldID}:
 			delete {_playerWorldsData::%loop-index%}
@@ -775,7 +869,7 @@ function worlds_registerWorld(worldID: text, player: player, worldName: text):
 	worlds_sendMessageToLog("World creation for world %{_worldName}% has started.")
 	set {_createTime} to "%now%"
 	replace all ":" with "-" in {_createTime}
-	set {worldsData::%{_worldID}%} to "%{_worldID}%:%{_playerUUID}%:%{_worldName}%:%{_createTime}%:"
+	set {worldsData::%{_worldID}%} to "%{_worldID}%:%{_playerUUID}%:%{_worldName}%:%{_createTime}%:%{_playerUUID}%:"
 	set {_playerDataRaw} to "%{_playerUUID}%:%{_playerWorldsAmount}%:%{_playerWorldsRaw}%:%{_playerOnWorld}%"
 	loop ((amount of {_playerDatas::*}) - 4) times:
 		set {_playerDataRaw} to "%{_playerDataRaw}%:%{_playerDatas::%(loop-number + 4)%}%"
@@ -1114,8 +1208,13 @@ function worlds_saveInventory(player: player, worldID: text):
 	loop 36 times:
 		set {_loopSlot} to (loop-number - 1)
 		set {worldsInventoryData::%{_inventorySaveID}%::%{_loopSlot}%} to (slot {_loopSlot} of {_player}'s inventory)
+	set {worldsInventoryData::%{_inventorySaveID}%::ARMOR_HELMET} to {_player}'s helmet
+	set {worldsInventoryData::%{_inventorySaveID}%::ARMOR_CHESTPLATE} to {_player}'s chestplate
+	set {worldsInventoryData::%{_inventorySaveID}%::ARMOR_LEGGINGS} to {_player}'s leggings
+	set {worldsInventoryData::%{_inventorySaveID}%::ARMOR_BOOTS} to {_player}'s boots
 	set {worldsInventoryData::%{_inventorySaveID}%::HEALTH} to {_player}'s health
 	set {worldsInventoryData::%{_inventorySaveID}%::HUNGER} to {_player}'s hunger
+	set {worldsInventoryData::%{_inventorySaveID}%::EXP} to {_player}'s exp
 	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
 	worlds_sendMessageToLog("Saved inventory for %{_player}% in world %{_worldDatas::3}%.")
 
@@ -1125,17 +1224,42 @@ function worlds_loadInventory(player: player, worldID: text):
 	loop 36 times:
 		set {_loopSlot} to (loop-number - 1)
 		set slot {_loopSlot} of {_player}'s inventory to {worldsInventoryData::%{_inventorySaveID}%::%{_loopSlot}%}
+	set {_player}'s helmet to {worldsInventoryData::%{_inventorySaveID}%::ARMOR_HELMET}
+	set {_player}'s chestplate to {worldsInventoryData::%{_inventorySaveID}%::ARMOR_CHESTPLATE}
+	set {_player}'s leggings to {worldsInventoryData::%{_inventorySaveID}%::ARMOR_LEGGINGS}
+	set {_player}'s boots to {worldsInventoryData::%{_inventorySaveID}%::ARMOR_BOOTS}
 	set {_player}'s health to {worldsInventoryData::%{_inventorySaveID}%::HEALTH}
 	set {_player}'s hunger to {worldsInventoryData::%{_inventorySaveID}%::HUNGER}
+	set {_player}'s exp to {worldsInventoryData::%{_inventorySaveID}%::EXP}
 	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
 	worlds_sendMessageToLog("Loaded inventory for %{_player}% in world %{_worldDatas::3}%.")
 
+function worlds_resetCurrentInventory(player: player):
+	clear {_player}'s inventory
+	set {_player}'s health to 10
+	set {_player}'s hunger to 10
+	set {_player}'s exp to 0
+
 function worlds_deleteWorldInventoryData(worldID: text) :: number:
-	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
-	set {_inventorySaveID} to "%{_worldID}%.%{_worldDatas::2}%"
+	set {_datasAmount} to 0
+	set {_worldPlayersUUID::*} to worlds_getWorldPartners({_worldID}, true)
+	loop {_worldPlayersUUID::*}:
+		add worlds_deleteInventoryData({_worldID}, {_worldPlayersUUID::%loop-index%}) to {_datasAmount}
+	return {_datasAmount}
+
+function worlds_deleteInventoryData(worldID: text, playerUUID: text) :: number:
+	set {_inventorySaveID} to "%{_worldID}%.%{_playerUUID}%"
 	set {_datasAmount} to (amount of {worldsInventoryData::%{_inventorySaveID}%::*})
 	delete {worldsInventoryData::%{_inventorySaveID}%::*}
+	set {_player} to ({_playerUUID} parsed as offline player)
+	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
+	worlds_sendMessageToLog("Deleted inventory data for %{_player}% in world %{_worldDatas::3}%.")
 	return {_datasAmount}
+
+function worlds_removeDroppedItemsInWorld(worldID: text):
+	loop all dropped items:
+		if worlds_checkInBorder((loop-value's location), {_worldID}) is true:
+			kill loop-value
 
 function worlds_checkAlphanumeric(text: text) :: boolean:
 	# This function is made due to Skript version 2.2-dev36 doesn't support the condition "is alphanumeric" so I made one myself
