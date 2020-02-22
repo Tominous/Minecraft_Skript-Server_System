@@ -123,7 +123,7 @@ command /world [<text>] [<text>] [<text>]:
 			if worlds_checkWorldPartner({_playerDatas::4}, (executor's UUID)) is true:
 				worlds_saveInventory(executor, {_playerDatas::4})
 			worlds_resetCurrentInventory(executor)
-			teleport executor to {worldSystemData::serverLobbyLocation}
+			teleport executor to worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation})
 			worlds_editPlayerData((executor's UUID), 4, "")
 			worlds_updateDisplayForAll()
 			send "&aYou have been teleported to lobby!" to executor
@@ -415,7 +415,7 @@ every 1 minute:
 on join:
 	worlds_playerDefaultDatas(player's UUID)
 	wait 5 ticks
-	teleport player to {worldSystemData::serverLobbyLocation}
+	teleport player to worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation})
 	worlds_resetCurrentInventory(player)
 	worlds_editPlayerData((player's UUID), 4, "")
 	worlds_editPlayerData((player's UUID), 5, "FALSE")
@@ -503,7 +503,7 @@ on damage:
 		cancel event
 		if {_voidTeleport} is true:
 			if {_playerDatas::4} is "":
-				worlds_damageEventDelayTeleport(victim, {worldSystemData::serverLobbyLocation})
+				worlds_damageEventDelayTeleport(victim, worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation}))
 			else:
 				worlds_damageEventDelayTeleport(victim, worlds_getWorldSpawnLocation({_playerDatas::4}))
 
@@ -799,7 +799,7 @@ function worlds_banPlayer(worldID: text, playerUUID: text):
 		else:
 			set {_bannedPlayerDatas::*} to worlds_getPlayerDatas({_playerUUID})
 			if {_bannedPlayerDatas::4} is {_worldID}:
-				teleport {_player} to {worldSystemData::serverLobbyLocation}
+				teleport {_player} to worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation})
 				worlds_editPlayerData({_playerUUID}, 4, "")
 				worlds_updateDisplayForAll()
 
@@ -853,7 +853,7 @@ function worlds_deleteWorld(worldID: text):
 	set {_playersInWorld::*} to worlds_getPlayersInWorld({_worldID})
 	worlds_deleteWorldInventoryData({_worldID})
 	loop {_playersInWorld::*}:
-		teleport {_playersInWorld::%loop-index%} to {worldSystemData::serverLobbyLocation}
+		teleport {_playersInWorld::%loop-index%} to worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation})
 		worlds_editPlayerData(({_playersInWorld::%loop-index%}'s UUID), 4, "")
 		worlds_resetCurrentInventory({_playersInWorld::%loop-index%})
 	loop {_playerWorldsData::*}:
@@ -1096,12 +1096,20 @@ function worlds_getWorldSpawnLocation(worldID: text) :: location:
 	set {_spawnLocation}'s x coords to (({_spawnLocation}'s x coords) + {_xDifference})
 	set {_spawnLocation}'s y coords to (({_spawnLocation}'s y coords) + {_yDifference})
 	set {_spawnLocation}'s z coords to (({_spawnLocation}'s z coords) + {_zDifference})
-	set {_topBlock} to {_spawnLocation}
+	return worlds_getSafeTeleportLocation({_spawnLocation})
+
+function worlds_getSafeTeleportLocation(spawnLocation: location) :: location:
+	set {_spawnLocation} to block at {_spawnLocation}'s location
 	loop 256 times:
-		set {_detectLocation} to location at (({_spawnLocation}'s x coords), (({_spawnLocation}'s y coords) + (loop-number)), ({_spawnLocation}'s z coords)) in ({_spawnLocation}'s world)
-		if block at {_detectLocation} is not air:
-			set {_topBlock} to {_detectLocation}
-	return (location 1.5 meters above {_topBlock})
+		set {_loopLocation} to location (loop-number - 1) meters above {_spawnLocation}
+		set {_isSafe} to true
+		if block at {_loopLocation} is not air:
+			set {_isSafe} to false
+		if block at location 1 meter above {_loopLocation} is not air:
+			set {_isSafe} to false
+		if {_isSafe} is true:
+			exit 1 loop
+	return (location 0.5 meters below {_loopLocation})
 
 #function worlds_playerUpdateBorder(player: player, worldID: text):
 #	set {_worldCenter} to worlds_getWorldCenter({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2}, {_worldID})
