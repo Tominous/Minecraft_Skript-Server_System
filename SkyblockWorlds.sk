@@ -558,7 +558,13 @@ on hunger meter change:
 	if {_worldDatas::2} is not (player's UUID):
 		cancel event
 
-on click:
+on rightclick:
+	if player's held item is solid:
+		stop
+	if worlds_eventCheckAccess(player) is false:
+		cancel event
+
+on leftclick:
 	if worlds_eventCheckAccess(player) is false:
 		cancel event
 
@@ -574,6 +580,17 @@ on vehicle enter:
 	set {_passengers::*} to event-entity's passenger
 	if worlds_eventCheckAccess({_passengers::1}) is false:
 		cancel event
+
+on target:
+	if target is not a player:
+		stop
+	set {_playerDatas::*} to worlds_getPlayerDatas(target's UUID)
+	if worlds_checkInBorder(target's location, {_playerDatas::4}) is false:
+		cancel event
+		stop
+	if worlds_checkWorldPartner({_playerDatas::4}, (target's UUID)) is false:
+		cancel event
+		stop
 
 function worlds_eventCheckAccess(entity: entity) :: boolean:
 	if {_entity} is not a player:
