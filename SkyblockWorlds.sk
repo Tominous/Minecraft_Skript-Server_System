@@ -277,10 +277,10 @@ command /world [<text>] [<text>] [<text>]:
 				send "&cYou are not allowed to use this sub-command! (Require {@systemDeveloperPermission})" to executor
 				stop
 			if arg 2 is not set:
-				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|setMaximumWorldsNameLength|setWorldCreationBlocksPerTick|toggleSidebar|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
+				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|setMaximumWorldsNameLength|setWorldCreationBlocksPerTick|toggleSidebar|toggleChatFormat|toggleTablist|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
 				stop
-			if arg 2 is not "getSystemInformations" or "setWorldModel" or "setLobbyLocation" or "setMaximumWorlds" or "setWorldsDistance" or "setWorldsBorderSize" or "setMaximumWorldsNameLength" or "setWorldCreationBlocksPerTick" or "toggleSidebar" or "cancelWorldCreation" or "resetDatas":
-				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|setMaximumWorldsNameLength|setWorldCreationBlocksPerTick|toggleSidebar|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
+			if arg 2 is not "getSystemInformations" or "setWorldModel" or "setLobbyLocation" or "setMaximumWorlds" or "setWorldsDistance" or "setWorldsBorderSize" or "setMaximumWorldsNameLength" or "setWorldCreationBlocksPerTick" or "toggleSidebar" or "toggleChatFormat" or "toggleTablist" or "cancelWorldCreation" or "resetDatas":
+				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|setMaximumWorldsNameLength|setWorldCreationBlocksPerTick|toggleSidebar|toggleChatFormat|toggleTablist|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
 				stop
 			if arg 2 is "getSystemInformations":
 				send "&e[World System Informations]%nl%&eModel Setup: &f%check [{worldSystemData::worldModelPosition_3} is set]%%nl%&eLobby Location: &f%{worldSystemData::serverLobbyLocation}%%nl%&ePlayer Maximum Worlds: &f%{worldSystemData::playerMaximumWorlds}%%nl%&eWorld Distance: &f%{worldSystemData::worldDistance}%%nl%&eBorder Size: &f%{worldSystemData::worldsBorderSize}%%nl%&eMaximum World Name Length: &f%{worldSystemData::worldMaximumNameLength}%%nl%&eWorld Creation Blocks Per Tick: &f%{worldSystemData::worldCreationBlocksPerTick}%%nl%&eSidebar Toggle: &f%{worldSystemData::toggleSidebar}%" to executor
@@ -364,6 +364,24 @@ command /world [<text>] [<text>] [<text>]:
 						worlds_newScoreboard(loop-player)
 					worlds_updateDisplayForAll()
 				worlds_sendMessageToLog("%executor% has toggled sidebar for all players.")
+			else if arg 2 is "toggleChatFormat":
+				if {worldSystemData::toggleChatFormat} is true:
+					set {worldSystemData::toggleChatFormat} to false
+					send "&eYou have turned &coff &echat display for all players!%nl%&eWorld system will no longer formatting in game chat." to executor
+				else:
+					set {worldSystemData::toggleChatFormat} to true
+					send "&eYou have turned &aon &echat display for all players!" to executor
+					worlds_updateDisplayForAll()
+				worlds_sendMessageToLog("%executor% has toggled chat display for all players.")
+			else if arg 2 is "toggleTablist":
+				if {worldSystemData::toggleTablist} is true:
+					set {worldSystemData::toggleTablist} to false
+					send "&eYou have turned &coff &etablist display for all players!%nl%&eWorld system will no longer changing player's tablist." to executor
+				else:
+					set {worldSystemData::toggleTablist} to true
+					send "&eYou have turned &aon &etablist display for all players!" to executor
+					worlds_updateDisplayForAll()
+				worlds_sendMessageToLog("%executor% has toggled tablist display for all players.")
 			else if arg 2 is "cancelWorldCreation":
 				if arg 3 is not set:
 					send "&cUsage: /world system cancelWorldCreation <name>" to executor
@@ -521,6 +539,8 @@ on pickup:
 		cancel event
 
 on chat:
+	if {worldSystemData::toggleChatFormat} is false:
+		stop
 	set {_playerDatas::*} to worlds_getPlayerDatas(player's UUID)
 	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
 	if {_worldDatas::3} is not set:
@@ -982,6 +1002,8 @@ function worlds_defaultDatas():
 	set {worldSystemData::worldMaximumNameLength} to (check [{worldSystemData::worldMaximumNameLength} is set] ? {worldSystemData::worldMaximumNameLength} : 15)
 	set {worldSystemData::worldCreationBlocksPerTick} to (check [{worldSystemData::worldCreationBlocksPerTick} is set] ? {worldSystemData::worldCreationBlocksPerTick} : 5000)
 	set {worldSystemData::toggleSidebar} to (check [{worldSystemData::toggleSidebar} is set] ? {worldSystemData::toggleSidebar} : true)
+	set {worldSystemData::toggleChatFormat} to (check [{worldSystemData::toggleChatFormat} is set] ? {worldSystemData::toggleChatFormat} : true)
+	set {worldSystemData::toggleTablist} to (check [{worldSystemData::toggleTablist} is set] ? {worldSystemData::toggleTablist} : true)
 
 function worlds_copyMap(scanStartLocation: location, scanEndLocation: location, mapPastePoint: location, worldID: text):
 	if ({_scanStartLocation}'s y coords) < ({_scanEndLocation}'s y coords):
@@ -1219,6 +1241,8 @@ function worlds_updateScoreboard(player: player):
 	set text of id "worlds-%{_player}'s UUID%-line4" to "&1"
 
 function worlds_updateTablist(player: player):
+	if {worldSystemData::toggleTablist} is false:
+		stop
 	set {_playerDatas::*} to worlds_getPlayerDatas({_player}'s UUID)
 	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
 	if {_worldDatas::3} is not set:
