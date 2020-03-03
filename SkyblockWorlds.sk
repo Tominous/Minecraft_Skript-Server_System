@@ -639,7 +639,7 @@ function worlds_openMenu(player: player, menuType: text, page: number, worldID: 
 		open chest with 5 row named "&aWorld Partners &7(Current World)" to {_player}
 	loop 2 times:
 		loop 9 times:
-			format a gui slot ((((loop-number-1) - 1) * 36) + ((loop-number-2) - 1)) of {_player} with white glass to do nothing
+			format a gui slot ((((loop-number-1) - 1) * 36) + ((loop-number-2) - 1)) of {_player} with white glass named "&f" to do nothing
 	if {_menuType} is "ACTIVE_WORLDS":
 		set {_objects::*} to worlds_getActiveWorlds()
 		set {_displayType} to 1
