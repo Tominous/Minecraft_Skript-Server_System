@@ -5,7 +5,7 @@ options:
 	systemAdministratorPermission: worlds.administrator
 	systemDeveloperPermission: worlds.developer
 
-command /world [<text>] [<text>] [<text>]:
+command /world [<text>] [<text>] [<text>] [<text>] [<text>] [<text>]:
 	trigger:
 		if arg 1 is not set:
 			send "&cUsage: /world <create|delete|rename|visit|lobby|partner|ban|unban|admin|logs|world|player|system> <...>" to executor
@@ -129,6 +129,9 @@ command /world [<text>] [<text>] [<text>]:
 			send "&aYou have been teleported to lobby!" to executor
 			worlds_sendMessageToLog("%executor% have been teleported to lobby.")
 		else if arg 1 is "partner":
+			if {worldSystemData::allowPartners} is false:
+				send "&cWorld partner feature has been disabled!" to executor
+				stop
 			set {_playerDatas::*} to worlds_getPlayerDatas(executor's uuid)
 			set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
 			if {_worldDatas::2} is not (executor's uuid):
@@ -277,13 +280,13 @@ command /world [<text>] [<text>] [<text>]:
 				send "&cYou are not allowed to use this sub-command! (Require {@systemDeveloperPermission})" to executor
 				stop
 			if arg 2 is not set:
-				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|setMaximumWorldsNameLength|setWorldCreationBlocksPerTick|toggleSidebar|toggleChatFormat|toggleTablist|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
+				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|setMaximumWorldsNameLength|setWorldCreationBlocksPerTick|allowPartners|toggleSidebar|toggleChatFormat|toggleTablist|cancelWorldCreation|editData|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
 				stop
-			if arg 2 is not "getSystemInformations" or "setWorldModel" or "setLobbyLocation" or "setMaximumWorlds" or "setWorldsDistance" or "setWorldsBorderSize" or "setMaximumWorldsNameLength" or "setWorldCreationBlocksPerTick" or "toggleSidebar" or "toggleChatFormat" or "toggleTablist" or "cancelWorldCreation" or "resetDatas":
-				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|setMaximumWorldsNameLength|setWorldCreationBlocksPerTick|toggleSidebar|toggleChatFormat|toggleTablist|cancelWorldCreation|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
+			if arg 2 is not "getSystemInformations" or "setWorldModel" or "setLobbyLocation" or "setMaximumWorlds" or "setWorldsDistance" or "setWorldsBorderSize" or "setMaximumWorldsNameLength" or "setWorldCreationBlocksPerTick" or "allowPartners" or "toggleSidebar" or "toggleChatFormat" or "toggleTablist" or "cancelWorldCreation" or "editData" or "resetDatas":
+				send "&cUsage: /world system <getSystemInformations|setWorldModel|setLobbyLocation|setMaximumWorlds|setWorldsDistance|setWorldsBorderSize|setMaximumWorldsNameLength|setWorldCreationBlocksPerTick|allowPartners|toggleSidebar|toggleChatFormat|toggleTablist|cancelWorldCreation|editData|resetDatas>%nl%&c&lWarning: &cDo not edit any system datas unless you know what you're doing, inappropriate edit will result in system/data corrupt!" to executor
 				stop
 			if arg 2 is "getSystemInformations":
-				send "&e[World System Informations]%nl%&eModel Setup: &f%check [{worldSystemData::worldModelPosition_3} is set]%%nl%&eLobby Location: &f%{worldSystemData::serverLobbyLocation}%%nl%&ePlayer Maximum Worlds: &f%{worldSystemData::playerMaximumWorlds}%%nl%&eWorld Distance: &f%{worldSystemData::worldDistance}%%nl%&eBorder Size: &f%{worldSystemData::worldsBorderSize}%%nl%&eMaximum World Name Length: &f%{worldSystemData::worldMaximumNameLength}%%nl%&eWorld Creation Blocks Per Tick: &f%{worldSystemData::worldCreationBlocksPerTick}%%nl%&eSidebar Toggle: &f%{worldSystemData::toggleSidebar}%%nl%&eChat Format Toggle: &f%{worldSystemData::toggleChatFormat}%%nl%&eTablist Toggle: &f%{worldSystemData::toggleTablist}%" to executor
+				send "&e[World System Informations]%nl%&eModel Setup: &f%check [{worldSystemData::worldModelPosition_3} is set]%%nl%&eLobby Location: &f%{worldSystemData::serverLobbyLocation}%%nl%&ePlayer Maximum Worlds: &f%{worldSystemData::playerMaximumWorlds}%%nl%&eWorld Distance: &f%{worldSystemData::worldDistance}%%nl%&eBorder Size: &f%{worldSystemData::worldsBorderSize}%%nl%&eMaximum World Name Length: &f%{worldSystemData::worldMaximumNameLength}%%nl%&eWorld Creation Blocks Per Tick: &f%{worldSystemData::worldCreationBlocksPerTick}%%nl%&eAllow Partners: &f%{worldSystemData::allowPartners}%%nl%&eSidebar Toggle: &f%{worldSystemData::toggleSidebar}%%nl%&eChat Format Toggle: &f%{worldSystemData::toggleChatFormat}%%nl%&eTablist Toggle: &f%{worldSystemData::toggleTablist}%" to executor
 			else if arg 2 is "setWorldModel":
 				if {worldSystemData::selectWorldModel_%executor's uuid%} is set:
 					send "&cYou have not done selecting world model!" to executor
@@ -351,37 +354,55 @@ command /world [<text>] [<text>] [<text>]:
 					stop
 				set {worldSystemData::worldCreationBlocksPerTick} to {_blocksPerTick}
 				send "&aSuccessfully set blocks per tick for world creation to %{_blocksPerTick}%!" to executor
-			else if arg 2 is "toggleSidebar":
-				if {worldSystemData::toggleSidebar} is true:
-					set {worldSystemData::toggleSidebar} to false
-					send "&eYou have turned &coff &esidebar for all players!" to executor
-					loop all players:
-						worlds_removeScoreboard(loop-player)
+			else if arg 2 is "allowPartners":
+				if arg 3 is not "true" or "false":
+					send "&cUsage: /world system allowPartners <true/false>" to executor
+					stop
+				if arg 3 is "true":
+					set {worldSystemData::allowPartners} to true
+					send "&eYou have &aenabled &eworld partners!" to executor
 				else:
+					set {worldSystemData::allowPartners} to false
+					send "&eYou have &cdisabled &eworld partners!" to executor
+				worlds_sendMessageToLog("%executor% has set allow partners to %{worldSystemData::allowPartners}%.")
+			else if arg 2 is "toggleSidebar":
+				if arg 3 is not "true" or "false":
+					send "&cUsage: /world system toggleSidebar <true/false>" to executor
+					stop
+				if arg 3 is "true":
 					set {worldSystemData::toggleSidebar} to true
-					send "&eYou have turned &aon &esidebar for all players!" to executor
+					send "&eYou have &aenabled &esidebar display!" to executor
 					loop all players:
 						worlds_newScoreboard(loop-player)
 					worlds_updateDisplayForAll()
-				worlds_sendMessageToLog("%executor% has toggled sidebar for all players.")
+				else:
+					set {worldSystemData::toggleSidebar} to false
+					send "&eYou have &cdisabled &esidebar display!" to executor
+				worlds_sendMessageToLog("%executor% has toggle sidebar display to %{worldSystemData::toggleSidebar}%.")
 			else if arg 2 is "toggleChatFormat":
-				if {worldSystemData::toggleChatFormat} is true:
-					set {worldSystemData::toggleChatFormat} to false
-					send "&eYou have turned &coff &echat display for all players!%nl%&eWorld system will no longer formatting in game chat." to executor
-				else:
+				if arg 3 is not "true" or "false":
+					send "&cUsage: /world system toggleChatFormat <true/false>" to executor
+					stop
+				if arg 3 is "true":
 					set {worldSystemData::toggleChatFormat} to true
-					send "&eYou have turned &aon &echat display for all players!" to executor
+					send "&eYou have &aenabled &echat format!" to executor
 					worlds_updateDisplayForAll()
-				worlds_sendMessageToLog("%executor% has toggled chat display for all players.")
-			else if arg 2 is "toggleTablist":
-				if {worldSystemData::toggleTablist} is true:
-					set {worldSystemData::toggleTablist} to false
-					send "&eYou have turned &coff &etablist display for all players!%nl%&eWorld system will no longer changing player's tablist." to executor
 				else:
+					set {worldSystemData::toggleChatFormat} to false
+					send "&eYou have &cdisabled &echat format!" to executor
+				worlds_sendMessageToLog("%executor% has toggle chat format to %{worldSystemData::toggleChatFormat}%.")
+			else if arg 2 is "toggleTablist":
+				if arg 3 is not "true" or "false":
+					send "&cUsage: /world system toggleTablist <true/false>" to executor
+					stop
+				if arg 3 is "true":
 					set {worldSystemData::toggleTablist} to true
-					send "&eYou have turned &aon &etablist display for all players!" to executor
+					send "&eYou have &aenabled &etablist display!" to executor
 					worlds_updateDisplayForAll()
-				worlds_sendMessageToLog("%executor% has toggled tablist display for all players.")
+				else:
+					set {worldSystemData::toggleTablist} to false
+					send "&eYou have &cdisabled &etablist display!" to executor
+				worlds_sendMessageToLog("%executor% has toggle tablist display to %{worldSystemData::toggleTablist}%.")
 			else if arg 2 is "cancelWorldCreation":
 				if arg 3 is not set:
 					send "&cUsage: /world system cancelWorldCreation <name>" to executor
@@ -396,6 +417,32 @@ command /world [<text>] [<text>] [<text>]:
 				delete {worldSystemData::worldCreateProgress_%{_targetWorldDatas::1}%}
 				send "&aSuccessfully canceled world creation for world %{_targetWorldDatas::3}%!" to executor
 				worlds_sendMessageToLog("%executor% canceled world creation for world %{_targetWorldDatas::3}%.")
+			else if arg 2 is "editData":
+				if arg 3 or arg 4 or arg 5 is not set:
+					send "&cUsage: /world system editData <world/player> <dataSource> <dataIndex> [dataValue]" to executor
+					stop
+				if arg 3 is not "player" or "world":
+					send "&cUsage: /world system editData <world/player> <dataSource> <dataIndex> [dataValue]" to executor
+					stop
+				set {_dataIndex} to (arg 5 parsed as number)
+				if {_dataIndex} is not set:
+					send "&cData index can only be a number!" to executor
+					stop
+				set {_dataValue} to (check [arg 6 is set] ? (arg 6) : "")
+				if arg 3 is "player":
+					if {playersData::%(arg 4)%} is not set:
+						send "&cNot found player with UUID %arg 4%!" to executor
+						stop
+					worlds_editPlayerData((arg 4), {_dataIndex}, ({_dataValue}))
+				else:
+					if {worldsData::%(arg 4)%} is not set:
+						send "&cNot found world with ID %arg 4%!" to executor
+						stop
+					worlds_editWorldData((arg 4), {_dataIndex}, ({_dataValue}))
+				if {_dataValue} is "":
+					send "&aYou have removed the data with index %{_dataIndex}%!" to executor
+				else:
+					send "&aYou have successfully edited the data to %{_dataValue}%!" to executor
 			else if arg 2 is "resetDatas":
 				set {_datasRemoved} to worlds_removeAllData()
 				wait 1 tick
@@ -639,7 +686,7 @@ function worlds_openMenu(player: player, menuType: text, page: number, worldID: 
 		open chest with 5 row named "&aWorld Partners &7(Current World)" to {_player}
 	loop 2 times:
 		loop 9 times:
-			format a gui slot ((((loop-number-1) - 1) * 36) + ((loop-number-2) - 1)) of {_player} with white glass named "&f" to do nothing
+			format a gui slot ((((loop-number-1) - 1) * 36) + ((loop-number-2) - 1)) of {_player} with white glass to do nothing
 	if {_menuType} is "ACTIVE_WORLDS":
 		set {_objects::*} to worlds_getActiveWorlds()
 		set {_displayType} to 1
@@ -731,6 +778,10 @@ function worlds_visitWorld(player: player, worldID: text, visitMessage: boolean 
 		worlds_loadInventory({_player}, {_worldID})
 	else if worlds_checkWorldPartner({_worldDatas::1}, ({_player}'s UUID)) is true:
 		set {_worldOwner} to ({_worldDatas::2} parsed as offline player)
+		if {worldSystemData::allowPartners} is false:
+			send "&e%{_player}% has visit your world %{_worldDatas::3}%!" to {_worldOwner}
+			send "&aYou are now visiting %{_worldOwner}%'s world!" to {_player}
+			stop
 		send "&aYou have been teleported to %{_worldOwner}%'s world!%nl%&eYou are a partner in this world." to {_player}
 		worlds_loadInventory({_player}, {_worldID})
 		if {_worldOwner} is online:
@@ -1001,6 +1052,7 @@ function worlds_defaultDatas():
 	set {worldSystemData::worldsBorderSize} to (check [{worldSystemData::worldsBorderSize} is set] ? {worldSystemData::worldsBorderSize} : 50)
 	set {worldSystemData::worldMaximumNameLength} to (check [{worldSystemData::worldMaximumNameLength} is set] ? {worldSystemData::worldMaximumNameLength} : 15)
 	set {worldSystemData::worldCreationBlocksPerTick} to (check [{worldSystemData::worldCreationBlocksPerTick} is set] ? {worldSystemData::worldCreationBlocksPerTick} : 5000)
+	set {worldSystemData::allowPartners} to (check [{worldSystemData::allowPartners} is set] ? {worldSystemData::allowPartners} : true)
 	set {worldSystemData::toggleSidebar} to (check [{worldSystemData::toggleSidebar} is set] ? {worldSystemData::toggleSidebar} : true)
 	set {worldSystemData::toggleChatFormat} to (check [{worldSystemData::toggleChatFormat} is set] ? {worldSystemData::toggleChatFormat} : true)
 	set {worldSystemData::toggleTablist} to (check [{worldSystemData::toggleTablist} is set] ? {worldSystemData::toggleTablist} : true)
