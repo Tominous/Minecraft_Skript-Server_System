@@ -123,7 +123,7 @@ command /world [<text>] [<text>] [<text>] [<text>] [<text>] [<text>]:
 			if worlds_checkWorldPartner({_playerDatas::4}, (executor's UUID)) is true:
 				worlds_saveInventory(executor, {_playerDatas::4})
 			worlds_resetCurrentInventory(executor)
-			teleport executor to worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation})
+			worlds_teleportWithDamageCooldown(executor, worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation}))
 			worlds_editPlayerData((executor's UUID), 4, "")
 			worlds_updateDisplayForAll()
 			send "&aYou have been teleported to lobby!" to executor
@@ -453,11 +453,8 @@ command /world [<text>] [<text>] [<text>] [<text>] [<text>] [<text>]:
 on script load:
 	worlds_defaultDatas()
 	set {_worldsCanceled} to 0
-	loop {worldSystemData::*}:
-		set {_dataReadSplit::*} to loop-index split by "_"
-		if {_dataReadSplit::1} is "worldCreateProgress":
-			delete {worldSystemData::%loop-index%}
-			add 1 to {_worldsCanceled}
+	set {_worldsCanceled} to worlds_removeWorldSystemDataType("worldCreateProgress")
+	set {_playerNotVulnerableRemoved} to worlds_removeWorldSystemDataType("playerNotVulnerable")
 	if {_worldsCanceled} > 0:
 		send "&c%{_worldsCanceled}% world creation(s) has been canceled due to script reload!" to all players
 		worlds_sendMessageToLog("%{_worldsCanceled}% world creation(s) has been canceled due to script reload.")
@@ -480,7 +477,7 @@ every 1 minute:
 on join:
 	worlds_playerDefaultDatas(player's UUID)
 	wait 5 ticks
-	teleport player to worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation})
+	worlds_teleportWithDamageCooldown(player, worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation}))
 	worlds_resetCurrentInventory(player)
 	worlds_editPlayerData((player's UUID), 4, "")
 	worlds_editPlayerData((player's UUID), 5, "FALSE")
@@ -564,6 +561,8 @@ on damage:
 			set {_damageCancel} to true
 		if worlds_checkWorldPartner({_playerDatas::4}, (victim's UUID)) is false:
 			set {_damageCancel} to true
+		if {worldSystemData::playerNotVulnerable_%victim's UUID%} is set:
+			set {_damageCancel} to true
 	if {_damageCancel} is true:
 		cancel event
 		if {_voidTeleport} is true:
@@ -574,12 +573,11 @@ on damage:
 
 function worlds_damageEventDelayTeleport(player: player, location: location):
 	wait 5 ticks
-	teleport {_player} to {_location}
+	worlds_teleportWithDamageCooldown({_player}, {_location})
 
 on drop:
 	if worlds_eventCheckAccess(player) is false:
 		cancel event
-		send "&cYou are not allowed to drop items in other player's world!" to player
 
 on pickup:
 	if worlds_eventCheckAccess(player) is false:
@@ -607,7 +605,7 @@ on death:
 		set {_playerWorld} to {_worldDatas::3}
 #	set the death message to "&e%victim% has died in world %{_playerWorld}%!"
 	set the death message to "&e%death message% in world %{_playerWorld}%!"
-	worlds_sendMessageToLog(death message)
+	worlds_sendMessageToLog(uncolored death message)
 	wait 5 ticks
 	force victim to respawn
 
@@ -617,12 +615,7 @@ on respawn:
 	worlds_visitWorld(player, {_playerDatas::4}, false, true, true)
 
 on hunger meter change:
-	set {_playerDatas::*} to worlds_getPlayerDatas(player's UUID)
-	if {_playerDatas::4} is "":
-		cancel event
-		stop
-	set {_worldDatas::*} to worlds_getWorldDatas({_playerDatas::4})
-	if {_worldDatas::2} is not (player's UUID):
+	if worlds_eventCheckAccess(player) is false:
 		cancel event
 
 on rightclick:
@@ -659,16 +652,13 @@ on target:
 		cancel event
 		stop
 
-function worlds_eventCheckAccess(entity: entity) :: boolean:
+function worlds_eventCheckAccess(entity: entity, bypassAdministratorCheck: boolean = false) :: boolean:
 	if {_entity} is not a player:
 		return true
-	set {_targetBlock} to ({_entity}'s targeted block)
 	set {_playerDatas::*} to worlds_getPlayerDatas({_entity}'s UUID)
-	if {_playerDatas::5} is "TRUE":
-		return true
-	if {_targetBlock} is set:
-		if worlds_checkInBorder(({_targetBlock}'s location), {_playerDatas::4}) is false:
-			return false
+	if {_bypassAdministratorCheck} is false:
+		if {_playerDatas::5} is "TRUE":
+			return true
 	if worlds_checkWorldPartner({_playerDatas::4}, ({_entity}'s UUID)) is true:
 		return true
 	return false
@@ -767,7 +757,7 @@ function worlds_visitWorld(player: player, worldID: text, visitMessage: boolean 
 	if block at (location 1 meter below {_teleportLocation}) is air:
 		set block at (location 1 meter below {_teleportLocation}) to bedrock
 		worlds_sendMessageToLog("No safe location found for visitors in world %{_worldDatas::3}%, system automatically generated a bedrock spawn.")
-	teleport {_player} to {_teleportLocation}
+	worlds_teleportWithDamageCooldown({_player}, {_teleportLocation})
 	worlds_editPlayerData(({_player}'s UUID), 4, {_worldID})
 	worlds_updateDisplayForAll()
 	if {_visitMessage} is false:
@@ -778,10 +768,6 @@ function worlds_visitWorld(player: player, worldID: text, visitMessage: boolean 
 		worlds_loadInventory({_player}, {_worldID})
 	else if worlds_checkWorldPartner({_worldDatas::1}, ({_player}'s UUID)) is true:
 		set {_worldOwner} to ({_worldDatas::2} parsed as offline player)
-		if {worldSystemData::allowPartners} is false:
-			send "&e%{_player}% has visit your world %{_worldDatas::3}%!" to {_worldOwner}
-			send "&aYou are now visiting %{_worldOwner}%'s world!" to {_player}
-			stop
 		send "&aYou have been teleported to %{_worldOwner}%'s world!%nl%&eYou are a partner in this world." to {_player}
 		worlds_loadInventory({_player}, {_worldID})
 		if {_worldOwner} is online:
@@ -798,8 +784,7 @@ function worlds_visitWorld(player: player, worldID: text, visitMessage: boolean 
 		worlds_sendMessageToLog("Administrator mode has canceled world kick on %{_player}% in world %{_worldDatas::3}%.")
 
 function worlds_checkWorldPartner(worldID: text, playerUUID: text) :: boolean:
-	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
-	set {_partnerUUID::*} to {_worldDatas::5} split by ","
+	set {_partnerUUID::*} to worlds_getWorldPartners({_worldID}, true)
 	loop {_partnerUUID::*}:
 		if {_partnerUUID::%loop-index%} is {_playerUUID}:
 			return true
@@ -839,7 +824,10 @@ function worlds_removePartner(worldID: text, playerUUID: text):
 
 function worlds_getWorldPartners(worldID: text, includeOwner: boolean = false) :: texts:
 	set {_worldDatas::*} to worlds_getWorldDatas({_worldID})
-	set {_worldPartnerUUID::*} to {_worldDatas::5} split by ","
+	if {worldSystemData::allowPartners} is true:
+		set {_worldPartnerUUID::*} to {_worldDatas::5} split by ","
+	else:
+		set {_worldPartnerUUID::*} to {_worldDatas::2}
 	if {_includeOwner} is false:
 		loop {_worldPartnerUUID::*}:
 			if {_worldPartnerUUID::%loop-index%} is {_worldDatas::2}:
@@ -870,7 +858,7 @@ function worlds_banPlayer(worldID: text, playerUUID: text):
 		else:
 			set {_bannedPlayerDatas::*} to worlds_getPlayerDatas({_playerUUID})
 			if {_bannedPlayerDatas::4} is {_worldID}:
-				teleport {_player} to worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation})
+				worlds_teleportWithDamageCooldown({_player}, worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation}))
 				worlds_editPlayerData({_playerUUID}, 4, "")
 				worlds_updateDisplayForAll()
 
@@ -924,7 +912,7 @@ function worlds_deleteWorld(worldID: text):
 	set {_playersInWorld::*} to worlds_getPlayersInWorld({_worldID})
 	worlds_deleteWorldInventoryData({_worldID})
 	loop {_playersInWorld::*}:
-		teleport {_playersInWorld::%loop-index%} to worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation})
+		worlds_teleportWithDamageCooldown({_playersInWorld::%loop-index%}, worlds_getSafeTeleportLocation({worldSystemData::serverLobbyLocation}))
 		worlds_editPlayerData(({_playersInWorld::%loop-index%}'s UUID), 4, "")
 		worlds_resetCurrentInventory({_playersInWorld::%loop-index%})
 	loop {_playerWorldsData::*}:
@@ -983,7 +971,7 @@ function worlds_registerWorld(worldID: text, player: player, worldName: text):
 	send "&aYour world has successfully being created!" to {_player}
 	wait 5 ticks
 	delete {worldSystemData::worldCreateProgress_%{_worldID}%}
-	teleport {_player} to worlds_getWorldSpawnLocation({_worldID})
+	worlds_teleportWithDamageCooldown({_player}, worlds_getWorldSpawnLocation({_worldID}))
 	worlds_editPlayerData(({_player}'s UUID), 4, {_worldID})
 	worlds_updateDisplayForAll()
 	worlds_sendMessageToLog("World creation for world %{_worldName}% has completed.")
@@ -1185,6 +1173,14 @@ function worlds_getSafeTeleportLocation(spawnLocation: location) :: location:
 			exit 1 loop
 	return (location 0.5 meters below {_loopLocation})
 
+function worlds_teleportWithDamageCooldown(player: player, location: location):
+	set {_playerUUID} to {_player}'s UUID
+	set {worldSystemData::playerNotVulnerable_%{_playerUUID}%} to now
+	wait 3 ticks
+	teleport {_player} to {_location}
+	wait 3 ticks
+	delete {worldSystemData::playerNotVulnerable_%{_playerUUID}%}
+
 #function worlds_playerUpdateBorder(player: player, worldID: text):
 #	set {_worldCenter} to worlds_getWorldCenter({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2}, {_worldID})
 #	set {_borderSize} to worlds_getWorldBorderSize({worldSystemData::worldModelPosition_1}, {worldSystemData::worldModelPosition_2})
@@ -1361,6 +1357,15 @@ function worlds_removeDroppedItemsInWorld(worldID: text):
 	loop all dropped items:
 		if worlds_checkInBorder((loop-value's location), {_worldID}) is true:
 			kill loop-value
+
+function worlds_removeWorldSystemDataType(dataType: text) :: number:
+	set {_dataRemoved} to 0
+	loop {worldSystemData::*}:
+		set {_dataReadSplit::*} to loop-index split by "_"
+		if {_dataReadSplit::1} is {_dataType}:
+			delete {worldSystemData::%loop-index%}
+			add 1 to {_dataRemoved}
+	return {_dataRemoved}
 
 function worlds_checkAlphanumeric(text: text) :: boolean:
 	# This function is made due to Skript version 2.2-dev36 doesn't support the condition "is alphanumeric" so I made one myself
