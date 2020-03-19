@@ -113,5 +113,6 @@ function hpBar_addAll():
 
 function hpBar_reload():
 	hpBar_deleteAll()
+	kill all area effect clouds
 	wait 5 ticks
 	hpBar_addAll()
