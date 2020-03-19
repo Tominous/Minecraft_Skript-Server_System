@@ -75,11 +75,8 @@ function hpBar_update(entity: entity):
 	make {entityHpBar::%{_entity}%} ride {_entity}
 	if {_entity} is a player:
 		set {_target} to "%{_entity}%"
-#	else:
-#		set {_target} to string_capitalize("%{_entity}%")
-# REMOVED DUE TO ONLY PLAYER ALLOWED HERE
 	spawn area effect cloud at location 300 meters above {_entity}'s location
-	add "{Radius:0.0f,CustomName:""&6&l%{_target}% - %{-entityHealth::%{_entity}%}%%%"",CustomNameVisible:1b,Duration:99999,Particle:take}" to last spawned entity's nbt
+	add "{Radius:0.0f,CustomName:""&6&l%{_target}% - %ceil({@entityCurrentHealth} / {@entityMaxHealth} * 100)%%%"",CustomNameVisible:1b,Duration:99999,Particle:take}" to last spawned entity's nbt
 	make last spawned entity ride {entityHpBar::%{_entity}%}
 	set {entityHpBarInfo::%{_entity}%} to last spawned entity
 
