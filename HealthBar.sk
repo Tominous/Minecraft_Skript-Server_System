@@ -61,7 +61,7 @@ function hpBar_update(entity: entity):
 			stop
 	kill {entityHpBar::%{_entity}%}
 	kill {entityHpBarInfo::%{_entity}%}
-	set {_hpBars} to floor({@entityCurrentHealth} / {@entityMaxHealth})
+	set {_hpBars} to ceil({@entityCurrentHealth} / {@entityMaxHealth} * 10)
 	set {_display} to ""
 	if {_hpBars} != 0:
 		loop {_hpBars} times:
