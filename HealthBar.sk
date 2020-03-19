@@ -1,8 +1,8 @@
 options:
 
 	# Select the entities that are going to have health bar enabled.
-	# EXAMPLE: [healthBarTargets: player or cow]
-	healthBarTargets: player or cow
+	# EXAMPLE: [healthBarTargets: player or skeleton or zombie]
+	healthBarTargets: player or skeleton or zombie
 	
 	# Add in the argument for health bar entity's health
 	# EXAMPLE: [entityCurrentHealth: {_entity}'s health]
@@ -11,6 +11,14 @@ options:
 	# Add in the argument for health bar entity's max health
 	# EXAMPLE: [entityMaxHealth: {_entity}'s max health]
 	entityMaxHealth: {_entity}'s max health
+
+	# Healthbar Title
+	# EXAMPLE: [healthbarTitle: &6&l%{_entityName}% - %{_percentageDisplay}%]
+	healthbarTitle: &6&l%{_entityName}% - %{_percentageDisplay}%
+
+	# Unicode for healthbar display
+	# EXAMPLE: [healthbarPercentage: ▊]
+	healthbarPercentage: ▊
 
 on script load:
 	kill all area effect clouds
@@ -61,27 +69,28 @@ function hpBar_update(entity: entity):
 			stop
 	kill {entityHpBar::%{_entity}%}
 	kill {entityHpBarInfo::%{_entity}%}
-	set {_hpBars} to ceil({@entityCurrentHealth} / {@entityMaxHealth} * 10)
+	set {_hpBars} to ({@entityCurrentHealth} / {@entityMaxHealth} * 10)
 	set {_display} to ""
 	if {_hpBars} != 0:
 		loop {_hpBars} times:
-			set {_display} to "%{_display}%&a▊"
+			set {_display} to "%{_display}%&a{@healthbarPercentage}"
 	if {_hpBars} != 10:
 		loop (10 - {_hpBars}) times:
-			set {_display} to "%{_display}%&c▊"
+			set {_display} to "%{_display}%&c{@healthbarPercentage}"
 	spawn area effect cloud at location 300 meters above {_entity}'s location
 	add "{Radius:0.0f,CustomName:""%{_display}%"",CustomNameVisible:1b,Duration:99999,Particle:take}" to last spawned entity's nbt
 	set {entityHpBar::%{_entity}%} to last spawned entity
 	make {entityHpBar::%{_entity}%} ride {_entity}
 	if {_entity} is a player:
-		set {_target} to "%{_entity}%"
+		set {_entityName} to "%{_entity}%"
 	else:
-		set {_targetNameRaw} to "%{_entity}%"
-		set {_targetNameSplit::*} to {_targetNameRaw} split by ""
-		set {_targetNameSplit::1} to {_targetNameSplit::1} in upper case
-		set {_target} to join {_targetNameSplit::*} with delimiter ""
+		set {_entityNameRaw} to "%{_entity}%"
+		set {_entityNameSplit::*} to {_entityNameRaw} split by ""
+		set {_entityNameSplit::1} to {_entityNameSplit::1} in upper case
+		set {_entityName} to join {_entityNameSplit::*} with delimiter ""
 	spawn area effect cloud at location 300 meters above {_entity}'s location
-	add "{Radius:0.0f,CustomName:""&6&l%{_target}% - %ceil({@entityCurrentHealth} / {@entityMaxHealth} * 100)%%%"",CustomNameVisible:1b,Duration:99999,Particle:take}" to last spawned entity's nbt
+	set {_percentageDisplay} to "%ceil({@entityCurrentHealth} / {@entityMaxHealth} * 100)%%%"
+	add "{Radius:0.0f,CustomName:""{@healthbarTitle}"",CustomNameVisible:1b,Duration:99999,Particle:take}" to last spawned entity's nbt
 	make last spawned entity ride {entityHpBar::%{_entity}%}
 	set {entityHpBarInfo::%{_entity}%} to last spawned entity
 
