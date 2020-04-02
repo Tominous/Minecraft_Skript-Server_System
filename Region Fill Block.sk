@@ -1,4 +1,5 @@
-function regionFill_area(location1: location, location2: location, fillBlocks: items):
+function regionFill_area(location1: location, location2: location, fillBlocks: items, blocksPerTick: number = 5000):
+	set {_blocks} to 0
 	set {_floors} to (1 + round(abs(({_location1}'s y coords) - ({_location2}'s y coords))))
 	if {_location1}'s x coords > {_location2}'s x coords:
 		set {_xChange} to -1
@@ -18,8 +19,11 @@ function regionFill_area(location1: location, location2: location, fillBlocks: i
 			loop (floor(abs({_location1}'s x coords - {_location2}'s x coords)) + 1) times:
 				set {_randomID} to random integer between 1 and (amount of {_fillBlocks::*})
 				set block at {_currentLocation} to {_fillBlocks::%{_randomID}%}
+				add 1 to {_blocks}
 				set {_currentLocation}'s x coords to ({_currentLocation}'s x coords + {_xChange})
-			wait 1 tick
+			if {_blocks} >= {_blocksPerTick}:
+				wait 1 tick
+				set {_blocks} to 0
 			set {_currentLocation}'s x coords to {_location1}'s x coords
 			set {_currentLocation}'s z coords to ({_currentLocation}'s z coords + {_zChange})
 		set {_currentLocation} to {_location1}
