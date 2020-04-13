@@ -1,3 +1,10 @@
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
+
 options:
 
 	# Announce punishment to all players on server.
@@ -16,9 +23,12 @@ options:
 	# EXAMPLE: [defaultReason: The Ban Hammer has spoken!]
 	defaultReason: The Ban Hammer has spoken!
 
-# NOTE: REQUIRE CombatAPI
-# NOTE: REQUIRE CombatAPI
-# NOTE: REQUIRE CombatAPI
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
+# Require MojangAPI (https://github.com/fireclaws9/Minecraft_Skript-API/blob/master/mojangAPI.sk)
 
 command /tempban [<offline player>] [<time span> @] [<text>]:
 	trigger:
@@ -245,7 +255,7 @@ command /name-history [<offline player>]:
 		if arg 1 is not set:
 			send "&cUsage: /name-history <player>%nl%&c&lNOTE: &r&cPlayer's name history will still be checked even they never joined before!" to executor
 			stop
-		set {_nameDatas::*} to api_getPlayerName(arg 1's uuid, true)
+		set {_nameDatas::*} to mojangAPI_getPlayerName(arg 1's uuid, true)
 		if (amount of {_nameDatas::*}) = 0:
 			send "&cPlayer not found in Minecraft official database!" to executor
 			stop
@@ -253,8 +263,8 @@ command /name-history [<offline player>]:
 		loop {_nameDatas::*}:
 			if {_nameDatas::%loop-index%} contains ":":
 				set {_data::*} to {_nameDatas::%loop-index%} split by ":"
-				set {_date} to api_unixToDate({_data::2})
-				set {_namesDisplay} to "%{_namesDisplay}%%nl%&a- &e%{_data::1}% &a(Changed to on &e%api_unixToDate({_data::2} parsed as number / 1000)%&a)"
+				set {_date} to mojangAPI_unixToDate({_data::2})
+				set {_namesDisplay} to "%{_namesDisplay}%%nl%&a- &e%{_data::1}% &a(Changed to on &e%mojangAPI_unixToDate({_data::2} parsed as number / 1000)%&a)"
 			else:
 				set {_namesDisplay} to "%{_namesDisplay}%%nl%&a- &e%{_nameDatas::%loop-index%}%"
 		send "&aName history for player &e%arg 1% &a(&e%amount of {_nameDatas::*}%&a):%{_namesDisplay}%" to executor
@@ -386,7 +396,7 @@ function isPunished(uuid: text, type: text="ALL") :: boolean:
 function getIpPlayers(ip: text) :: offline players:
 	set {_uuids::*} to {ipHistory::%{_ip}%} split by ":"
 	loop {_uuids::*}:
-		set {_nameHistory::*} to api_getPlayerName({_uuids::%loop-index%})
+		set {_nameHistory::*} to mojangAPI_getPlayerName({_uuids::%loop-index%})
 		set {_amount} to amount of {_nameHistory::*}
 		add ("%{_nameHistory::%{_amount}%}%" parsed as offline player) to {_names::*}
 	return {_names::*}
