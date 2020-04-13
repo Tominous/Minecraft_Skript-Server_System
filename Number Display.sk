@@ -5,20 +5,5 @@ function numberDisplay_getNumberDisplay(number: number) :: text:
 			set {_number} to ({_number} / (1000 ^ ({_times} - 1)))
 			exit 1 loop
 		add 1 to {_times}
-	if {_times} is 1:
-		set {_display} to ""
-	else if {_times} is 2:
-		set {_display} to "K"
-	else if {_times} is 3:
-		set {_display} to "M"
-	else if {_times} is 4:
-		set {_display} to "B"
-	else if {_times} is 5:
-		set {_display} to "T"
-	else if {_times} is 6:
-		set {_display} to "Qa"
-	else if {_times} is 7:
-		set {_display} to "Qi"
-	else:
-		return "Add more after this if needed."
-	return "%{_number}%%{_display}%"
+	set {_display::*} to "" and "K" and "M" and "B" and "T" and "Qa" and "Qi" and "Sx" and "Sp" and "Oc" and "No" and "Dc" and "Ud" and "Dd" and "Td" and "Qad" and "Qid" and "Sxd" and "Spd" and "Ocd" and "Nod" and "Vg" and "Uvg"
+	return "%{_number}%%{_display::%{_times}%}%"
