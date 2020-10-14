@@ -63,6 +63,7 @@ command /world [<text>] [<text>] [<text>] [<text>] [<text>] [<text>]:
 				send "&cYou aren't allowed to delete other player's world!" to executor
 				if (amount of {_playerWorldNames::*}) > 0:
 					send "&c&lYour Worlds: &c%{_playerWorldNames::*}%" to executor
+				stop
 			if {worldSystemData::worldCreateProgress_%{_targetWorldDatas::1}%} is set:
 				send "&cThis world is still generating!" to executor
 				stop
